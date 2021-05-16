@@ -142,7 +142,26 @@ Sys_GetClipboardData
 */
 char *Sys_GetClipboardData(void)
 {
+#ifdef DEDICATED
 	return NULL;
+#else
+	char *data = NULL;
+	char *cliptext;
+
+	if ( ( cliptext = SDL_GetClipboardText() ) != NULL ) {
+		if ( cliptext[0] != '\0' ) {
+			size_t bufsize = strlen( cliptext ) + 1;
+
+			data = Z_Malloc( bufsize );
+			Q_strncpyz( data, cliptext, bufsize );
+
+			// find first listed char and set to '\0'
+			strtok( data, "\n\r\b" );
+		}
+		SDL_free( cliptext );
+	}
+	return data;
+#endif
 }
 
 #ifdef DEDICATED
@@ -302,14 +321,12 @@ cpuFeatures_t Sys_GetProcessorFeatures( void )
 	cpuFeatures_t features = 0;
 
 #ifndef DEDICATED
-	if( SDL_HasRDTSC( ) )    features |= CF_RDTSC;
-	if( SDL_HasMMX( ) )      features |= CF_MMX;
-	if( SDL_HasMMXExt( ) )   features |= CF_MMX_EXT;
-	if( SDL_Has3DNow( ) )    features |= CF_3DNOW;
-	if( SDL_Has3DNowExt( ) ) features |= CF_3DNOW_EXT;
-	if( SDL_HasSSE( ) )      features |= CF_SSE;
-	if( SDL_HasSSE2( ) )     features |= CF_SSE2;
-	if( SDL_HasAltiVec( ) )  features |= CF_ALTIVEC;
+	if( SDL_HasRDTSC( ) )      features |= CF_RDTSC;
+	if( SDL_Has3DNow( ) )      features |= CF_3DNOW;
+	if( SDL_HasMMX( ) )        features |= CF_MMX;
+	if( SDL_HasSSE( ) )        features |= CF_SSE;
+	if( SDL_HasSSE2( ) )       features |= CF_SSE2;
+	if( SDL_HasAltiVec( ) )    features |= CF_ALTIVEC;
 #endif
 
 	return features;
@@ -614,7 +631,7 @@ void Sys_ParseArgs( int argc, char **argv )
 		if( !strcmp( argv[1], "--version" ) ||
 				!strcmp( argv[1], "-v" ) )
 		{
-			const char* date = __DATE__;
+			const char* date = PRODUCT_DATE;
 #ifdef DEDICATED
 			fprintf( stdout, Q3_VERSION " dedicated server (%s)\n", date );
 #else
@@ -674,6 +691,9 @@ int main( int argc, char **argv )
 	int   i;
 	char  commandLine[ MAX_STRING_CHARS ] = { 0 };
 
+	extern void Sys_LaunchAutoupdater(int argc, char **argv);
+	Sys_LaunchAutoupdater(argc, argv);
+
 #ifndef DEDICATED
 	// SDL version check
 
@@ -683,19 +703,20 @@ int main( int argc, char **argv )
 #	endif
 
 	// Run time
-	const SDL_version *ver = SDL_Linked_Version( );
+	SDL_version ver;
+	SDL_GetVersion( &ver );
 
 #define MINSDL_VERSION \
 	XSTRING(MINSDL_MAJOR) "." \
 	XSTRING(MINSDL_MINOR) "." \
 	XSTRING(MINSDL_PATCH)
 
-	if( SDL_VERSIONNUM( ver->major, ver->minor, ver->patch ) <
+	if( SDL_VERSIONNUM( ver.major, ver.minor, ver.patch ) <
 			SDL_VERSIONNUM( MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH ) )
 	{
 		Sys_Dialog( DT_ERROR, va( "SDL version " MINSDL_VERSION " or greater is required, "
 			"but only version %d.%d.%d was found. You may be able to obtain a more recent copy "
-			"from http://www.libsdl.org/.", ver->major, ver->minor, ver->patch ), "SDL Library Too Old" );
+			"from http://www.libsdl.org/.", ver.major, ver.minor, ver.patch ), "SDL Library Too Old" );
 
 		Sys_Exit( 1 );
 	}
@@ -705,6 +726,12 @@ int main( int argc, char **argv )
 
 	// Set the initial time base
 	Sys_Milliseconds( );
+
+#ifdef __APPLE__
+	// This is passed if we are launched by double-clicking
+	if ( argc >= 2 && Q_strncmp ( argv[1], "-psn", 4 ) == 0 )
+		argc = 1;
+#endif
 
 	Sys_ParseArgs( argc, argv );
 	Sys_SetBinaryPath( Sys_Dirname( argv[ 0 ] ) );
