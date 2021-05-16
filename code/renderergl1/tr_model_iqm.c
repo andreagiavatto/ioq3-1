@@ -188,7 +188,7 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 	char			meshName[MAX_QPATH];
 	int				vertexArrayFormat[IQM_COLOR+1];
 	int				allocateInfluences;
-	byte 			*blendIndexes;
+	byte *blendIndexes;
 	union {
 		byte *b;
 		float *f;
