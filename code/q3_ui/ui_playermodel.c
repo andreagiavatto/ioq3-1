@@ -339,14 +339,14 @@ static void PlayerModel_PicEvent( void* ptr, int event )
 		Q_strncpyz(s_playermodel.modelskin,buffptr,pdest-buffptr+1);
 		strcat(s_playermodel.modelskin,pdest + 5);
 
-		// separate the model name
+		// seperate the model name
 		maxlen = pdest-buffptr;
 		if (maxlen > 16)
 			maxlen = 16;
 		Q_strncpyz( s_playermodel.modelname.string, buffptr, maxlen );
 		Q_strupr( s_playermodel.modelname.string );
 
-		// separate the skin name
+		// seperate the skin name
 		maxlen = strlen(pdest+5)+1;
 		if (maxlen > 16)
 			maxlen = 16;
@@ -494,14 +494,14 @@ static void PlayerModel_SetMenuItems( void )
 			s_playermodel.selectedmodel = i;
 			s_playermodel.modelpage     = i/MAX_MODELSPERPAGE;
 
-			// separate the model name
+			// seperate the model name
 			maxlen = pdest-buffptr;
 			if (maxlen > 16)
 				maxlen = 16;
 			Q_strncpyz( s_playermodel.modelname.string, buffptr, maxlen );
 			Q_strupr( s_playermodel.modelname.string );
 
-			// separate the skin name
+			// seperate the skin name
 			maxlen = strlen(pdest+5)+1;
 			if (maxlen > 16)
 				maxlen = 16;

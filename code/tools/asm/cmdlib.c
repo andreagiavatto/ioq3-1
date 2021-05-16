@@ -734,7 +734,7 @@ int    LoadFile( const char *filename, void **bufferptr )
 ==============
 LoadFileBlock
 -
-rounds up memory allocation to 4K boundary
+rounds up memory allocation to 4K boundry
 -
 ==============
 */
@@ -810,7 +810,7 @@ void DefaultExtension (char *path, const char *extension)
 {
 	char    *src;
 //
-// if path doesn't have a .EXT, append extension
+// if path doesnt have a .EXT, append extension
 // (extension should include the .)
 //
 	src = path + strlen(path) - 1;

@@ -1371,7 +1371,7 @@ static void CG_AddPainTwitch( centity_t *cent, vec3_t torsoAngles ) {
 ===============
 CG_PlayerAngles
 
-Handles separate torso motion
+Handles seperate torso motion
 
   legs pivot based on direction of movement
 

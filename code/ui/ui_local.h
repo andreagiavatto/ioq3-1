@@ -258,7 +258,7 @@ typedef struct
 	int width;
 	int height;
 	int	columns;
-	int	separation;
+	int	seperation;
 } menulist_s;
 
 typedef struct

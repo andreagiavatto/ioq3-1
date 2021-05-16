@@ -54,10 +54,10 @@ static void LerpDrawVert( srfVert_t *a, srfVert_t *b, srfVert_t *out ) {
 	out->lightmap[0] = 0.5f * (a->lightmap[0] + b->lightmap[0]);
 	out->lightmap[1] = 0.5f * (a->lightmap[1] + b->lightmap[1]);
 
-	out->color[0] = ((int)a->color[0] + (int)b->color[0]) >> 1;
-	out->color[1] = ((int)a->color[1] + (int)b->color[1]) >> 1;
-	out->color[2] = ((int)a->color[2] + (int)b->color[2]) >> 1;
-	out->color[3] = ((int)a->color[3] + (int)b->color[3]) >> 1;
+	out->vertexColors[0] = 0.5f * (a->vertexColors[0] + b->vertexColors[0]);
+	out->vertexColors[1] = 0.5f * (a->vertexColors[1] + b->vertexColors[1]);
+	out->vertexColors[2] = 0.5f * (a->vertexColors[2] + b->vertexColors[2]);
+	out->vertexColors[3] = 0.5f * (a->vertexColors[3] + b->vertexColors[3]);
 }
 
 /*
@@ -207,15 +207,12 @@ static	int	neighbors[8][2] = {
 			//if ( count == 0 ) {
 			//	printf("bad normal\n");
 			//}
-			{
-				vec3_t fNormal;
-				VectorNormalize2(sum, fNormal);
-				R_VaoPackNormal(dv->normal, fNormal);
-			}
+			VectorNormalize2( sum, dv->normal );
 		}
 	}
 }
 
+#ifdef USE_VERT_TANGENT_SPACE
 static void MakeMeshTangentVectors(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], int numIndexes,
 								   glIndex_t indexes[(MAX_GRID_SIZE-1)*(MAX_GRID_SIZE-1)*2*3])
 {
@@ -254,13 +251,17 @@ static void MakeMeshTangentVectors(int width, int height, srfVert_t ctrl[MAX_GRI
 		}
 	}
 }
+#endif
 
 
-static int MakeMeshIndexes(int width, int height, glIndex_t indexes[(MAX_GRID_SIZE-1)*(MAX_GRID_SIZE-1)*2*3])
+static int MakeMeshIndexes(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE],
+							 glIndex_t indexes[(MAX_GRID_SIZE-1)*(MAX_GRID_SIZE-1)*2*3])
 {
 	int             i, j;
 	int             numIndexes;
 	int             w, h;
+	srfVert_t      *dv;
+	static srfVert_t       ctrl2[MAX_GRID_SIZE * MAX_GRID_SIZE];
 
 	h = height - 1;
 	w = width - 1;
@@ -284,6 +285,16 @@ static int MakeMeshIndexes(int width, int height, glIndex_t indexes[(MAX_GRID_SI
 			indexes[numIndexes++] = v1;
 			indexes[numIndexes++] = v3;
 			indexes[numIndexes++] = v4;
+		}
+	}
+
+	// FIXME: use more elegant way
+	for(i = 0; i < width; i++)
+	{
+		for(j = 0; j < height; j++)
+		{
+			dv = &ctrl2[j * width + i];
+			*dv = ctrl[j][i];
 		}
 	}
 
@@ -364,17 +375,21 @@ static void PutPointsOnCurve( srfVert_t	ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE],
 R_CreateSurfaceGridMesh
 =================
 */
-void R_CreateSurfaceGridMesh(srfBspSurface_t *grid, int width, int height,
+srfBspSurface_t *R_CreateSurfaceGridMesh(int width, int height,
 								srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], float errorTable[2][MAX_GRID_SIZE],
 								int numIndexes, glIndex_t indexes[(MAX_GRID_SIZE-1)*(MAX_GRID_SIZE-1)*2*3]) {
-	int i, j;
+	int i, j, size;
 	srfVert_t	*vert;
 	vec3_t		tmpVec;
+	srfBspSurface_t *grid;
 
 	// copy the results out to a grid
-	Com_Memset(grid, 0, sizeof(*grid));
+	size = (width * height - 1) * sizeof( srfVert_t ) + sizeof( *grid );
 
 #ifdef PATCH_STITCHING
+	grid = /*ri.Hunk_Alloc*/ ri.Malloc( size );
+	Com_Memset(grid, 0, size);
+
 	grid->widthLodError = /*ri.Hunk_Alloc*/ ri.Malloc( width * 4 );
 	Com_Memcpy( grid->widthLodError, errorTable[0], width * 4 );
 
@@ -388,6 +403,9 @@ void R_CreateSurfaceGridMesh(srfBspSurface_t *grid, int width, int height,
 	grid->numVerts = (width * height);
 	grid->verts = ri.Malloc(grid->numVerts * sizeof(srfVert_t));
 #else
+	grid = ri.Hunk_Alloc( size );
+	Com_Memset(grid, 0, size);
+
 	grid->widthLodError = ri.Hunk_Alloc( width * 4 );
 	Com_Memcpy( grid->widthLodError, errorTable[0], width * 4 );
 
@@ -423,6 +441,7 @@ void R_CreateSurfaceGridMesh(srfBspSurface_t *grid, int width, int height,
 	VectorCopy( grid->cullOrigin, grid->lodOrigin );
 	grid->lodRadius = grid->cullRadius;
 	//
+	return grid;
 }
 
 /*
@@ -430,11 +449,12 @@ void R_CreateSurfaceGridMesh(srfBspSurface_t *grid, int width, int height,
 R_FreeSurfaceGridMesh
 =================
 */
-static void R_FreeSurfaceGridMeshData( srfBspSurface_t *grid ) {
+void R_FreeSurfaceGridMesh( srfBspSurface_t *grid ) {
 	ri.Free(grid->widthLodError);
 	ri.Free(grid->heightLodError);
 	ri.Free(grid->indexes);
 	ri.Free(grid->verts);
+	ri.Free(grid);
 }
 
 /*
@@ -442,7 +462,7 @@ static void R_FreeSurfaceGridMeshData( srfBspSurface_t *grid ) {
 R_SubdividePatchToGrid
 =================
 */
-void R_SubdividePatchToGrid( srfBspSurface_t *grid, int width, int height,
+srfBspSurface_t *R_SubdividePatchToGrid( int width, int height,
 								srfVert_t points[MAX_PATCH_SIZE*MAX_PATCH_SIZE] ) {
 	int			i, j, k, l;
 	srfVert_t_cleared( prev );
@@ -609,13 +629,15 @@ void R_SubdividePatchToGrid( srfBspSurface_t *grid, int width, int height,
 #endif
 
 	// calculate indexes
-	numIndexes = MakeMeshIndexes(width, height, indexes);
+	numIndexes = MakeMeshIndexes(width, height, ctrl, indexes);
 
 	// calculate normals
 	MakeMeshNormals( width, height, ctrl );
+#ifdef USE_VERT_TANGENT_SPACE
 	MakeMeshTangentVectors(width, height, ctrl, numIndexes, indexes);
+#endif
 
-	R_CreateSurfaceGridMesh(grid, width, height, ctrl, errorTable, numIndexes, indexes);
+	return R_CreateSurfaceGridMesh(width, height, ctrl, errorTable, numIndexes, indexes);
 }
 
 /*
@@ -623,7 +645,7 @@ void R_SubdividePatchToGrid( srfBspSurface_t *grid, int width, int height,
 R_GridInsertColumn
 ===============
 */
-void R_GridInsertColumn( srfBspSurface_t *grid, int column, int row, vec3_t point, float loderror ) {
+srfBspSurface_t *R_GridInsertColumn( srfBspSurface_t *grid, int column, int row, vec3_t point, float loderror ) {
 	int i, j;
 	int width, height, oldwidth;
 	srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE];
@@ -636,7 +658,7 @@ void R_GridInsertColumn( srfBspSurface_t *grid, int column, int row, vec3_t poin
 	oldwidth = 0;
 	width = grid->width + 1;
 	if (width > MAX_GRID_SIZE)
-		return;
+		return NULL;
 	height = grid->height;
 	for (i = 0; i < width; i++) {
 		if (i == column) {
@@ -662,20 +684,20 @@ void R_GridInsertColumn( srfBspSurface_t *grid, int column, int row, vec3_t poin
 	//PutPointsOnCurve( ctrl, width, height );
 
 	// calculate indexes
-	numIndexes = MakeMeshIndexes(width, height, indexes);
+	numIndexes = MakeMeshIndexes(width, height, ctrl, indexes);
 
 	// calculate normals
 	MakeMeshNormals( width, height, ctrl );
-	MakeMeshTangentVectors(width, height, ctrl, numIndexes, indexes);
 
 	VectorCopy(grid->lodOrigin, lodOrigin);
 	lodRadius = grid->lodRadius;
 	// free the old grid
-	R_FreeSurfaceGridMeshData(grid);
+	R_FreeSurfaceGridMesh(grid);
 	// create a new grid
-	R_CreateSurfaceGridMesh(grid, width, height, ctrl, errorTable, numIndexes, indexes);
+	grid = R_CreateSurfaceGridMesh(width, height, ctrl, errorTable, numIndexes, indexes);
 	grid->lodRadius = lodRadius;
 	VectorCopy(lodOrigin, grid->lodOrigin);
+	return grid;
 }
 
 /*
@@ -683,7 +705,7 @@ void R_GridInsertColumn( srfBspSurface_t *grid, int column, int row, vec3_t poin
 R_GridInsertRow
 ===============
 */
-void R_GridInsertRow( srfBspSurface_t *grid, int row, int column, vec3_t point, float loderror ) {
+srfBspSurface_t *R_GridInsertRow( srfBspSurface_t *grid, int row, int column, vec3_t point, float loderror ) {
 	int i, j;
 	int width, height, oldheight;
 	srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE];
@@ -697,7 +719,7 @@ void R_GridInsertRow( srfBspSurface_t *grid, int row, int column, vec3_t point, 
 	width = grid->width;
 	height = grid->height + 1;
 	if (height > MAX_GRID_SIZE)
-		return;
+		return NULL;
 	for (i = 0; i < height; i++) {
 		if (i == row) {
 			//insert new row
@@ -722,18 +744,18 @@ void R_GridInsertRow( srfBspSurface_t *grid, int row, int column, vec3_t point, 
 	//PutPointsOnCurve( ctrl, width, height );
 
 	// calculate indexes
-	numIndexes = MakeMeshIndexes(width, height, indexes);
+	numIndexes = MakeMeshIndexes(width, height, ctrl, indexes);
 
 	// calculate normals
 	MakeMeshNormals( width, height, ctrl );
-	MakeMeshTangentVectors(width, height, ctrl, numIndexes, indexes);
 
 	VectorCopy(grid->lodOrigin, lodOrigin);
 	lodRadius = grid->lodRadius;
 	// free the old grid
-	R_FreeSurfaceGridMeshData(grid);
+	R_FreeSurfaceGridMesh(grid);
 	// create a new grid
-	R_CreateSurfaceGridMesh(grid, width, height, ctrl, errorTable, numIndexes, indexes);
+	grid = R_CreateSurfaceGridMesh(width, height, ctrl, errorTable, numIndexes, indexes);
 	grid->lodRadius = lodRadius;
 	VectorCopy(lodOrigin, grid->lodOrigin);
+	return grid;
 }

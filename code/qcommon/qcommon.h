@@ -669,7 +669,7 @@ long	FS_ReadFileDir(const char *qpath, void *searchPath, qboolean unpure, void *
 long	FS_ReadFile(const char *qpath, void **buffer);
 // returns the length of the file
 // a null buffer will just return the file length without loading
-// as a quick check for existence. -1 length == not present
+// as a quick check for existance. -1 length == not present
 // A 0 byte will always be appended at the end, so string ops are safe.
 // the buffer should be considered read-only, because it may be cached
 // for other uses.
@@ -764,7 +764,6 @@ void Field_CompleteFilename( const char *dir,
 		const char *ext, qboolean stripExt, qboolean allowNonPureFilesOnDisk );
 void Field_CompleteCommand( char *cmd,
 		qboolean doCommands, qboolean doCvars );
-void Field_CompletePlayerName( const char **names, int count );
 
 /*
 ==============================================================
@@ -843,10 +842,6 @@ void		Com_StartupVariable( const char *match );
 // checks for and removes command line "+set var arg" constructs
 // if match is NULL, all set commands will be executed, otherwise
 // only a set with the exact name.  Only used during startup.
-
-qboolean		Com_PlayerNameToFieldString( char *str, int length, const char *name );
-qboolean		Com_FieldStringToPlayerName( char *name, int length, const char *rawname );
-int QDECL	Com_strCompare( const void *a, const void *b );
 
 
 extern	cvar_t	*com_developer;
@@ -1059,13 +1054,7 @@ int SV_SendQueuedPackets(void);
 qboolean UI_GameCommand( void );
 qboolean UI_usesUniqueCDKey(void);
 
-//
-// input interface
-//
-void IN_Init( void *windowData );
 void IN_Frame( void );
-void IN_Shutdown( void );
-void IN_Restart( void );
 
 /*
 ==============================================================
@@ -1124,7 +1113,7 @@ char	*Sys_DefaultInstallPath(void);
 char	*Sys_SteamPath(void);
 char	*Sys_GogPath(void);
 
-#ifdef __APPLE__
+#ifdef MACOS_X
 char    *Sys_DefaultAppPath(void);
 #endif
 

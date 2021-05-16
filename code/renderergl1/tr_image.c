@@ -176,10 +176,6 @@ void R_ImageList_f( void ) {
 				format = "sBPTC";
 				// 128 bits per 16 pixels, so 1 byte per pixel
 				break;
-			case GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT:
-				format = "LATC ";
-				// 128 bits per 16 pixels, so 1 byte per pixel
-				break;
 			case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
 				format = "DXT1 ";
 				// 64 bits per 16 pixels, so 4 bits per pixel
@@ -935,7 +931,7 @@ static int numImageLoaders = ARRAY_LEN( imageLoaders );
 =================
 R_LoadImage
 
-Loads any of the supported image types into a canonical
+Loads any of the supported image types into a cannonical
 32 bit format.
 =================
 */
@@ -1394,7 +1390,7 @@ SKINS
 CommaParse
 
 This is unfortunate, but the skin files aren't
-compatible with our normal parsing rules.
+compatable with our normal parsing rules.
 ==================
 */
 static char *CommaParse( char **data_p ) {

@@ -22,9 +22,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_shade_calc.c
 
 #include "tr_local.h"
+#if idppc_altivec && !defined(MACOS_X)
+#include <altivec.h>
+#endif
 
 
-#define	WAVEVALUE( table, base, amplitude, phase, freq )  ((base) + table[ ( (int64_t) ( ( (phase) + tess.shaderTime * (freq) ) * FUNCTABLE_SIZE ) ) & FUNCTABLE_MASK ] * (amplitude))
+#define	WAVEVALUE( table, base, amplitude, phase, freq )  ((base) + table[ ri.ftol( ( ( (phase) + tess.shaderTime * (freq) ) * FUNCTABLE_SIZE ) ) & FUNCTABLE_MASK ] * (amplitude))
 
 static float *TableForFunc( genFunc_t func ) 
 {
@@ -113,16 +116,16 @@ void RB_CalcDeformVertexes( deformStage_t *ds )
 	vec3_t	offset;
 	float	scale;
 	float	*xyz = ( float * ) tess.xyz;
-	int16_t	*normal = tess.normal[0];
+	uint32_t	*normal = tess.normal;
 	float	*table;
 
 	if ( ds->deformationWave.frequency == 0 )
 	{
 		scale = EvalWaveForm( &ds->deformationWave );
 
-		for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal += 4 )
+		for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal++ )
 		{
-			R_VaoUnpackNormal(offset, normal);
+			R_VaoUnpackNormal(offset, *normal);
 			
 			xyz[0] += offset[0] * scale;
 			xyz[1] += offset[1] * scale;
@@ -133,7 +136,7 @@ void RB_CalcDeformVertexes( deformStage_t *ds )
 	{
 		table = TableForFunc( ds->deformationWave.func );
 
-		for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal += 4 )
+		for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal++ )
 		{
 			float off = ( xyz[0] + xyz[1] + xyz[2] ) * ds->deformationSpread;
 
@@ -142,7 +145,7 @@ void RB_CalcDeformVertexes( deformStage_t *ds )
 				ds->deformationWave.phase + off,
 				ds->deformationWave.frequency );
 
-			R_VaoUnpackNormal(offset, normal);
+			R_VaoUnpackNormal(offset, *normal);
 
 			xyz[0] += offset[0] * scale;
 			xyz[1] += offset[1] * scale;
@@ -162,12 +165,12 @@ void RB_CalcDeformNormals( deformStage_t *ds ) {
 	int i;
 	float	scale;
 	float	*xyz = ( float * ) tess.xyz;
-	int16_t *normal = tess.normal[0];
+	uint32_t *normal = tess.normal;
 
-	for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal += 4 ) {
+	for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal++ ) {
 		vec3_t fNormal;
 
-		R_VaoUnpackNormal(fNormal, normal);
+		R_VaoUnpackNormal(fNormal, *normal);
 
 		scale = 0.98f;
 		scale = R_NoiseGet4f( xyz[0] * scale, xyz[1] * scale, xyz[2] * scale,
@@ -186,7 +189,7 @@ void RB_CalcDeformNormals( deformStage_t *ds ) {
 
 		VectorNormalizeFast( fNormal );
 
-		R_VaoPackNormal(normal, fNormal);
+		*normal = R_VaoPackNormal(fNormal);
 	}
 }
 
@@ -200,17 +203,17 @@ void RB_CalcBulgeVertexes( deformStage_t *ds ) {
 	int i;
 	const float *st = ( const float * ) tess.texCoords[0];
 	float		*xyz = ( float * ) tess.xyz;
-	int16_t	*normal = tess.normal[0];
-	double		now;
+	uint32_t		*normal = tess.normal;
+	float		now;
 
-	now = backEnd.refdef.time * 0.001 * ds->bulgeSpeed;
+	now = backEnd.refdef.time * ds->bulgeSpeed * 0.001f;
 
-	for ( i = 0; i < tess.numVertexes; i++, xyz += 4, st += 2, normal += 4 ) {
-		int64_t off;
+	for ( i = 0; i < tess.numVertexes; i++, xyz += 4, st += 4, normal++ ) {
+		int		off;
 		float scale;
 		vec3_t fNormal;
 
-		R_VaoUnpackNormal(fNormal, normal);
+		R_VaoUnpackNormal(fNormal, *normal);
 
 		off = (float)( FUNCTABLE_SIZE / (M_PI*2) ) * ( st[0] * ds->bulgeWidth + now );
 
@@ -347,7 +350,7 @@ static void GlobalVectorToLocal( const vec3_t in, vec3_t out ) {
 =====================
 AutospriteDeform
 
-Assuming all the triangles for this shader are independent
+Assuming all the triangles for this shader are independant
 quads, rebuild them as forward facing sprites
 =====================
 */
@@ -381,7 +384,6 @@ static void AutospriteDeform( void ) {
 	}
 
 	for ( i = 0 ; i < oldVerts ; i+=4 ) {
-		vec4_t color;
 		// find the midpoint
 		xyz = tess.xyz[i];
 
@@ -412,8 +414,7 @@ static void AutospriteDeform( void ) {
       VectorScale(up, axisLength, up);
     }
 
-		VectorScale4(tess.color[i], 1.0f / 65535.0f, color);
-		RB_AddQuadStamp( mid, left, up, color );
+		RB_AddQuadStamp( mid, left, up, tess.vertexColors[i] );
 	}
 }
 
@@ -773,8 +774,8 @@ void RB_CalcScaleTexMatrix( const float scale[2], float *matrix )
 */
 void RB_CalcScrollTexMatrix( const float scrollSpeed[2], float *matrix )
 {
-	double timeScale = tess.shaderTime;
-	double adjustedScrollS, adjustedScrollT;
+	float timeScale = tess.shaderTime;
+	float adjustedScrollS, adjustedScrollT;
 
 	adjustedScrollS = scrollSpeed[0] * timeScale;
 	adjustedScrollT = scrollSpeed[1] * timeScale;
@@ -802,9 +803,9 @@ void RB_CalcTransformTexMatrix( const texModInfo_t *tmi, float *matrix  )
 */
 void RB_CalcRotateTexMatrix( float degsPerSecond, float *matrix )
 {
-	double timeScale = tess.shaderTime;
-	double degs;
-	int64_t index;
+	float timeScale = tess.shaderTime;
+	float degs;
+	int index;
 	float sinValue, cosValue;
 
 	degs = -degsPerSecond * timeScale;

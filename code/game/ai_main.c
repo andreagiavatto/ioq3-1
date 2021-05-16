@@ -1260,7 +1260,7 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 	if (restart) {
 		BotReadSessionData(bs);
 	}
-	//bot has been setup successfully
+	//bot has been setup succesfully
 	return qtrue;
 }
 

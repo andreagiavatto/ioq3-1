@@ -636,7 +636,7 @@ static void opt(char *arg) {
 					clist = append(&arg[3], clist);
 					return;
 				}
-				break; /* and fall through */
+				break; /* and fall thru */
 			case 'a':
 				alist = append(&arg[3], alist);
 				return;

@@ -68,7 +68,6 @@ typedef struct {
 	int			fullsamples;			// samples with all channels in buffer (samples divided by channels)
 	int			submission_chunk;		// don't mix less than this #
 	int			samplebits;
-	int			isfloat;
 	int			speed;
 	byte		*buffer;
 } dma_t;
@@ -177,15 +176,6 @@ void	SNDDMA_BeginPainting (void);
 
 void	SNDDMA_Submit(void);
 
-#ifdef USE_VOIP
-void SNDDMA_StartCapture(void);
-int SNDDMA_AvailableCaptureSamples(void);
-void SNDDMA_Capture(int samples, byte *data);
-void SNDDMA_StopCapture(void);
-void SNDDMA_MasterGain(float val);
-#endif
-
-
 //====================================================================
 
 #define	MAX_CHANNELS			96
@@ -265,7 +255,3 @@ typedef enum
 typedef int srcHandle_t;
 
 qboolean S_AL_Init( soundInterface_t *si );
-
-#ifdef idppc_altivec
-void S_PaintChannelFrom16_altivec( portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE], int snd_vol, channel_t *ch, const sfx_t *sc, int count, int sampleOffset, int bufferOffset );
-#endif

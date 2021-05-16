@@ -136,7 +136,7 @@ Cvars for HDR and tonemapping:
                                    r_hdr, r_postprocess, and r_toneMap.
                                      0 - No.
                                      1 - Yes. (default)
-
+                                     
 *  `r_forceAutoExposure`            - Cheat.  Override built-in and map auto
                                    exposure settings and use cvars
                                    r_forceAutoExposureMin and 
@@ -235,7 +235,7 @@ Cvars for advanced material usage:
 
 Cvars for image interpolation and generation:
 
-*  `r_imageUpsample`                - Use interpolation to artificially increase
+*  `r_imageUpsample`                - Use interpolation to artifically increase
                                    the resolution of all textures.  Looks good
                                    in certain circumstances.
                                      0 - No. (default)
@@ -257,7 +257,7 @@ Cvars for image interpolation and generation:
                                          FCBI without second derivatives)
                                      2 - Okay but slow (normal FCBI)
 
-*  `r_genNormalMaps`                - Naively generate normal maps for all
+*  `r_genNormalMaps*                - Naively generate normal maps for all
                                    textures.
                                      0 - Don't. (default)
                                      1 - Do.
@@ -269,6 +269,10 @@ Cvars for the sunlight and cascaded shadow maps:
                                      1 - Do.
                                      2 - Sunrise, sunset.
 
+*  `r_forceSunMapLightScale`        - Cheat. Scale map brightness by this factor
+                                   when r_forceSun 1.
+                                     1.0 - Default
+                                     
 *  `r_forceSunLightScale`           - Cheat. Scale sun brightness by this factor
                                    when r_forceSun 1.
                                      1.0 - Default
@@ -306,6 +310,23 @@ Cvars for the sunlight and cascaded shadow maps:
                                             2048.
 
 Cvars that you probably don't care about or shouldn't mess with:
+
+*  `r_mergeMultidraws`              - Optimize number of calls to 
+                                   glMultiDrawElements().
+                                     0 - Don't.
+                                     1 - Do some. (default)
+                                     2 - Do more than necessary (eats CPU).
+
+*  `r_mergeLeafSurfaces`            - Merge surfaces that share common materials
+                                   and a common leaf.  Speeds up rendering.
+                                     0 - Don't.
+                                     1 - Do. (default)
+
+*  `r_recalcMD3Normals`             - Recalculate the normals when loading an MD3.
+                                   Fixes normal maps in some cases but looks
+                                   ugly in others.
+                                     0 - Don't. (default)
+                                     1 - Do.
 
 *  `r_depthPrepass`                 - Do a depth-only pass before rendering.
                                    Speeds up rendering in cases where advanced
@@ -490,7 +511,7 @@ and is the equivalent for 'exactVertex'.
 
 This adds a new keyword to sky materials, q3gl2_sun.  The syntax is:
 
-    q3gl2_sun <red> <green> <blue> <intensity> <degrees> <elevation> <shadowScale>
+    q3gl2_sun <red> <green> <blue> <intensity> <degrees> <elevation> <mapLightScale> <ambientLightScale>
   
 Note the first six parameters are the same as in q3map_sun or q3map_sunExt,
 and the last two indicate scaling factors for the map brightness and an ambient
@@ -511,7 +532,7 @@ There are currently two ways to use this in your own (and other people's) maps.
           surfaceparm nolightmap
           surfaceparm sky
           q3map_sunExt 240 238 200 100 195 35 3 16
-          q3gl2_sun 240 238 200 50 195 35 0.2
+          q3gl2_sun 240 238 200 50 195 35 1.0 0.2
           q3map_skylight 50 16
           q3map_lightimage $whiteimage
 
@@ -534,7 +555,7 @@ There are currently two ways to use this in your own (and other people's) maps.
           surfaceparm noimpact
           surfaceparm nolightmap
           surfaceparm sky
-          q3gl2_sun 240 238 200 50 195 35 0.2
+          q3gl2_sun 240 238 200 50 195 35 0.5 0.2
           q3map_skylight 50 16
           q3map_lightimage $whiteimage
 

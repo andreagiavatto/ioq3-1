@@ -64,7 +64,7 @@ char *Sys_DefaultHomePath(void)
 		if( ( p = getenv( "HOME" ) ) != NULL )
 		{
 			Com_sprintf(homePath, sizeof(homePath), "%s%c", p, PATH_SEP);
-#ifdef __APPLE__
+#ifdef MACOS_X
 			Q_strcat(homePath, sizeof(homePath),
 				"Library/Application Support/");
 
@@ -97,7 +97,7 @@ char *Sys_SteamPath( void )
 
 	if( ( p = getenv( "HOME" ) ) != NULL )
 	{
-#ifdef __APPLE__
+#ifdef MACOS_X
 		char *steamPathEnd = "/Library/Application Support/Steam/SteamApps/common/" STEAMPATH_NAME;
 #else
 		char *steamPathEnd = "/.steam/steam/SteamApps/common/" STEAMPATH_NAME;
@@ -190,6 +190,16 @@ char *Sys_GetCurrentUser( void )
 		return "player";
 	}
 	return p->pw_name;
+}
+
+/*
+==================
+Sys_GetClipboardData
+==================
+*/
+char *Sys_GetClipboardData(void)
+{
+	return NULL;
 }
 
 #define MEM_THRESHOLD 96*1024*1024
@@ -495,7 +505,7 @@ void Sys_FreeFileList( char **list )
 ==================
 Sys_Sleep
 
-Block execution for msec or until input is received.
+Block execution for msec or until input is recieved.
 ==================
 */
 void Sys_Sleep( int msec )
@@ -591,7 +601,7 @@ void Sys_ErrorDialog( const char *error )
 	close( f );
 }
 
-#ifndef __APPLE__
+#ifndef MACOS_X
 static char execBuffer[ 1024 ];
 static char *execBufferPointer;
 static char *execArgv[ 16 ];

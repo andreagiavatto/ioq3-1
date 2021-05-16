@@ -58,7 +58,7 @@ void GL_BindToTMU( image_t *image, int tmu )
 		ri.Printf(PRINT_WARNING, "GL_BindToTMU: NULL image\n");
 	}
 
-	GL_BindMultiTexture(GL_TEXTURE0 + tmu, target, texture);
+	GL_BindMultiTexture(GL_TEXTURE0_ARB + tmu, target, texture);
 }
 
 
@@ -263,6 +263,44 @@ void GL_State( unsigned long stateBits )
 		}
 	}
 
+	//
+	// alpha test
+	//
+	if ( diff & GLS_ATEST_BITS )
+	{
+		uint32_t oldState = glState.glStateBits & GLS_ATEST_BITS;
+		uint32_t newState = stateBits & GLS_ATEST_BITS;
+		uint32_t storedState = glState.storedGlState & GLS_ATEST_BITS;
+
+		if (oldState == 0)
+		{
+			qglEnable(GL_ALPHA_TEST);
+		}
+		else if (newState == 0)
+		{
+			qglDisable(GL_ALPHA_TEST);
+		}
+
+		if (newState != 0 && storedState != newState)
+		{
+			glState.storedGlState &= ~GLS_ATEST_BITS;
+			glState.storedGlState |= newState;
+
+			switch ( newState )
+			{
+			case GLS_ATEST_GT_0:
+				qglAlphaFunc( GL_GREATER, 0.0f );
+				break;
+			case GLS_ATEST_LT_80:
+				qglAlphaFunc( GL_LESS, 0.5f );
+				break;
+			case GLS_ATEST_GE_80:
+				qglAlphaFunc( GL_GEQUAL, 0.5f );
+				break;
+			}
+		}
+	}
+
 	glState.glStateBits = stateBits;
 }
 
@@ -433,8 +471,9 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	int				i;
 	drawSurf_t		*drawSurf;
 	int				oldSort;
-	double			originalTime;
+	float			originalTime;
 	FBO_t*			fbo = NULL;
+	qboolean		inQuery = qfalse;
 
 	// save original time for entity shader offsets
 	originalTime = backEnd.refdef.floatTime;
@@ -470,7 +509,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 		//
 		// change the tess parameters if needed
-		// a "entityMergable" shader is a shader that can have surfaces from separate
+		// a "entityMergable" shader is a shader that can have surfaces from seperate
 		// entities merged into a single batch, like smoke and blood puff sprites
 		if ( shader != NULL && ( shader != oldShader || fogNum != oldFogNum || dlighted != oldDlighted || pshadowed != oldPshadowed || cubemapIndex != oldCubemapIndex
 			|| ( entityNum != oldEntityNum && !shader->entityMergable ) ) ) {
@@ -497,10 +536,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 			if ( entityNum != REFENTITYNUM_WORLD ) {
 				backEnd.currentEntity = &backEnd.refdef.entities[entityNum];
-
-				// FIXME: e.shaderTime must be passed as int to avoid fp-precision loss issues
-				backEnd.refdef.floatTime = originalTime - (double)backEnd.currentEntity->e.shaderTime;
-
+				backEnd.refdef.floatTime = originalTime - backEnd.currentEntity->e.shaderTime;
 				// we have to reset the shaderTime as well otherwise image animations start
 				// from the wrong frame
 				tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
@@ -592,6 +628,10 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 		RB_EndSurface();
 	}
 
+	if (inQuery) {
+		qglEndQueryARB(GL_SAMPLES_PASSED_ARB);
+	}
+
 	if (glRefConfig.framebufferObject)
 		FBO_Bind(fbo);
 
@@ -652,10 +692,14 @@ void	RB_SetGL2D (void) {
 			  GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
 	GL_Cull( CT_TWO_SIDED );
+	qglDisable( GL_CLIP_PLANE0 );
 
 	// set time for 2D shaders
 	backEnd.refdef.time = ri.Milliseconds();
-	backEnd.refdef.floatTime = backEnd.refdef.time * 0.001;
+	backEnd.refdef.floatTime = backEnd.refdef.time * 0.001f;
+
+	// reset color scaling
+	backEnd.refdef.colorScale = 1.0f;
 }
 
 
@@ -683,7 +727,7 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 		RB_EndSurface();
 	}
 
-	// we definitely want to sync every frame for the cinematics
+	// we definately want to sync every frame for the cinematics
 	qglFinish();
 
 	start = 0;
@@ -749,16 +793,16 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 	if ( cols != tr.scratchImage[client]->width || rows != tr.scratchImage[client]->height ) {
 		tr.scratchImage[client]->width = tr.scratchImage[client]->uploadWidth = cols;
 		tr.scratchImage[client]->height = tr.scratchImage[client]->uploadHeight = rows;
-		qglTextureImage2DEXT(texture, GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-		qglTextureParameterfEXT(texture, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		qglTextureParameterfEXT(texture, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-		qglTextureParameterfEXT(texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		qglTextureParameterfEXT(texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		qglTextureImage2D(texture, GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		qglTextureParameterf(texture, GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	} else {
 		if (dirty) {
 			// otherwise, just subimage upload it so that drivers can tell we are going to be changing
 			// it and don't try and do a texture compression
-			qglTextureSubImage2DEXT(texture, GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			qglTextureSubImage2D(texture, GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		}
 	}
 }
@@ -825,43 +869,43 @@ const void *RB_StretchPic ( const void *data ) {
 	tess.indexes[ numIndexes + 5 ] = numVerts + 1;
 
 	{
-		uint16_t color[4];
+		vec4_t color;
 
-		VectorScale4(backEnd.color2D, 257, color);
+		VectorScale4(backEnd.color2D, 1.0f / 255.0f, color);
 
-		VectorCopy4(color, tess.color[ numVerts ]);
-		VectorCopy4(color, tess.color[ numVerts + 1]);
-		VectorCopy4(color, tess.color[ numVerts + 2]);
-		VectorCopy4(color, tess.color[ numVerts + 3 ]);
+		VectorCopy4(color, tess.vertexColors[ numVerts ]);
+		VectorCopy4(color, tess.vertexColors[ numVerts + 1]);
+		VectorCopy4(color, tess.vertexColors[ numVerts + 2]);
+		VectorCopy4(color, tess.vertexColors[ numVerts + 3 ]);
 	}
 
 	tess.xyz[ numVerts ][0] = cmd->x;
 	tess.xyz[ numVerts ][1] = cmd->y;
 	tess.xyz[ numVerts ][2] = 0;
 
-	tess.texCoords[ numVerts ][0] = cmd->s1;
-	tess.texCoords[ numVerts ][1] = cmd->t1;
+	tess.texCoords[ numVerts ][0][0] = cmd->s1;
+	tess.texCoords[ numVerts ][0][1] = cmd->t1;
 
 	tess.xyz[ numVerts + 1 ][0] = cmd->x + cmd->w;
 	tess.xyz[ numVerts + 1 ][1] = cmd->y;
 	tess.xyz[ numVerts + 1 ][2] = 0;
 
-	tess.texCoords[ numVerts + 1 ][0] = cmd->s2;
-	tess.texCoords[ numVerts + 1 ][1] = cmd->t1;
+	tess.texCoords[ numVerts + 1 ][0][0] = cmd->s2;
+	tess.texCoords[ numVerts + 1 ][0][1] = cmd->t1;
 
 	tess.xyz[ numVerts + 2 ][0] = cmd->x + cmd->w;
 	tess.xyz[ numVerts + 2 ][1] = cmd->y + cmd->h;
 	tess.xyz[ numVerts + 2 ][2] = 0;
 
-	tess.texCoords[ numVerts + 2 ][0] = cmd->s2;
-	tess.texCoords[ numVerts + 2 ][1] = cmd->t2;
+	tess.texCoords[ numVerts + 2 ][0][0] = cmd->s2;
+	tess.texCoords[ numVerts + 2 ][0][1] = cmd->t2;
 
 	tess.xyz[ numVerts + 3 ][0] = cmd->x;
 	tess.xyz[ numVerts + 3 ][1] = cmd->y + cmd->h;
 	tess.xyz[ numVerts + 3 ][2] = 0;
 
-	tess.texCoords[ numVerts + 3 ][0] = cmd->s1;
-	tess.texCoords[ numVerts + 3 ][1] = cmd->t2;
+	tess.texCoords[ numVerts + 3 ][0][0] = cmd->s1;
+	tess.texCoords[ numVerts + 3 ][0][1] = cmd->t2;
 
 	return (const void *)(cmd + 1);
 }
@@ -875,7 +919,6 @@ RB_DrawSurfs
 */
 const void	*RB_DrawSurfs( const void *data ) {
 	const drawSurfsCommand_t	*cmd;
-	qboolean isShadowView;
 
 	// finish any 2D drawing if needed
 	if ( tess.numIndexes ) {
@@ -887,8 +930,6 @@ const void	*RB_DrawSurfs( const void *data ) {
 	backEnd.refdef = cmd->refdef;
 	backEnd.viewParms = cmd->viewParms;
 
-	isShadowView = !!(backEnd.viewParms.flags & VPF_DEPTHSHADOW);
-
 	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView ();
 
@@ -897,7 +938,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 		qglEnable(GL_DEPTH_CLAMP);
 	}
 
-	if (glRefConfig.framebufferObject && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) && (r_depthPrepass->integer || isShadowView))
+	if (glRefConfig.framebufferObject && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) && (r_depthPrepass->integer || (backEnd.viewParms.flags & VPF_DEPTHSHADOW)))
 	{
 		FBO_t *oldFbo = glState.currentFBO;
 		vec4_t viewInfo;
@@ -910,208 +951,203 @@ const void	*RB_DrawSurfs( const void *data ) {
 		qglColorMask(!backEnd.colorMask[0], !backEnd.colorMask[1], !backEnd.colorMask[2], !backEnd.colorMask[3]);
 		backEnd.depthFill = qfalse;
 
-		if (!isShadowView)
+		if (tr.msaaResolveFbo)
 		{
-			if (tr.msaaResolveFbo)
+			// If we're using multisampling, resolve the depth first
+			FBO_FastBlit(tr.renderFbo, NULL, tr.msaaResolveFbo, NULL, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		}
+		else if (tr.renderFbo == NULL && tr.renderDepthImage)
+		{
+			// If we're rendering directly to the screen, copy the depth to a texture
+			qglCopyTextureImage2D(tr.renderDepthImage->texnum, GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 0, 0, glConfig.vidWidth, glConfig.vidHeight, 0);
+		}
+
+		if (tr.hdrDepthFbo)
+		{
+			// need the depth in a texture we can do GL_LINEAR sampling on, so copy it to an HDR image
+			vec4_t srcTexCoords;
+
+			VectorSet4(srcTexCoords, 0.0f, 0.0f, 1.0f, 1.0f);
+
+			FBO_BlitFromTexture(tr.renderDepthImage, srcTexCoords, NULL, tr.hdrDepthFbo, NULL, NULL, NULL, 0);
+		}
+
+		if (r_sunlightMode->integer && backEnd.viewParms.flags & VPF_USESUNLIGHT)
+		{
+			vec4_t quadVerts[4];
+			vec2_t texCoords[4];
+			vec4_t box;
+
+			FBO_Bind(tr.screenShadowFbo);
+
+			box[0] = backEnd.viewParms.viewportX      * tr.screenShadowFbo->width  / (float)glConfig.vidWidth;
+			box[1] = backEnd.viewParms.viewportY      * tr.screenShadowFbo->height / (float)glConfig.vidHeight;
+			box[2] = backEnd.viewParms.viewportWidth  * tr.screenShadowFbo->width  / (float)glConfig.vidWidth;
+			box[3] = backEnd.viewParms.viewportHeight * tr.screenShadowFbo->height / (float)glConfig.vidHeight;
+
+			qglViewport(box[0], box[1], box[2], box[3]);
+			qglScissor(box[0], box[1], box[2], box[3]);
+
+			box[0] = backEnd.viewParms.viewportX               / (float)glConfig.vidWidth;
+			box[1] = backEnd.viewParms.viewportY               / (float)glConfig.vidHeight;
+			box[2] = box[0] + backEnd.viewParms.viewportWidth  / (float)glConfig.vidWidth;
+			box[3] = box[1] + backEnd.viewParms.viewportHeight / (float)glConfig.vidHeight;
+
+			texCoords[0][0] = box[0]; texCoords[0][1] = box[3];
+			texCoords[1][0] = box[2]; texCoords[1][1] = box[3];
+			texCoords[2][0] = box[2]; texCoords[2][1] = box[1];
+			texCoords[3][0] = box[0]; texCoords[3][1] = box[1];
+
+			box[0] = -1.0f;
+			box[1] = -1.0f;
+			box[2] =  1.0f;
+			box[3] =  1.0f;
+
+			VectorSet4(quadVerts[0], box[0], box[3], 0, 1);
+			VectorSet4(quadVerts[1], box[2], box[3], 0, 1);
+			VectorSet4(quadVerts[2], box[2], box[1], 0, 1);
+			VectorSet4(quadVerts[3], box[0], box[1], 0, 1);
+
+			GL_State( GLS_DEPTHTEST_DISABLE );
+
+			GLSL_BindProgram(&tr.shadowmaskShader);
+
+			GL_BindToTMU(tr.renderDepthImage, TB_COLORMAP);
+			
+			if (r_shadowCascadeZFar->integer != 0)
 			{
-				// If we're using multisampling, resolve the depth first
-				FBO_FastBlit(tr.renderFbo, NULL, tr.msaaResolveFbo, NULL, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+				GL_BindToTMU(tr.sunShadowDepthImage[0], TB_SHADOWMAP);
+				GL_BindToTMU(tr.sunShadowDepthImage[1], TB_SHADOWMAP2);
+				GL_BindToTMU(tr.sunShadowDepthImage[2], TB_SHADOWMAP3);
+				GL_BindToTMU(tr.sunShadowDepthImage[3], TB_SHADOWMAP4);
+
+				GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP,  backEnd.refdef.sunShadowMvp[0]);
+				GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP2, backEnd.refdef.sunShadowMvp[1]);
+				GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP3, backEnd.refdef.sunShadowMvp[2]);
+				GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP4, backEnd.refdef.sunShadowMvp[3]);
 			}
-			else if (tr.renderFbo == NULL && tr.renderDepthImage)
+			else
 			{
-				// If we're rendering directly to the screen, copy the depth to a texture
-				// This is incredibly slow on Intel Graphics, so just skip it on there
-				if (!glRefConfig.intelGraphics)
-					qglCopyTextureSubImage2DEXT(tr.renderDepthImage->texnum, GL_TEXTURE_2D, 0, 0, 0, 0, 0, glConfig.vidWidth, glConfig.vidHeight);
+				GL_BindToTMU(tr.sunShadowDepthImage[3], TB_SHADOWMAP);
+				GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP, backEnd.refdef.sunShadowMvp[3]);
 			}
-
-			if (tr.hdrDepthFbo)
+			
+			GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWORIGIN,  backEnd.refdef.vieworg);
 			{
-				// need the depth in a texture we can do GL_LINEAR sampling on, so copy it to an HDR image
-				vec4_t srcTexCoords;
+				vec3_t viewVector;
 
-				VectorSet4(srcTexCoords, 0.0f, 0.0f, 1.0f, 1.0f);
+				float zmax = backEnd.viewParms.zFar;
+				float ymax = zmax * tan(backEnd.viewParms.fovY * M_PI / 360.0f);
+				float xmax = zmax * tan(backEnd.viewParms.fovX * M_PI / 360.0f);
 
-				FBO_BlitFromTexture(tr.renderDepthImage, srcTexCoords, NULL, tr.hdrDepthFbo, NULL, NULL, NULL, 0);
-			}
+				VectorScale(backEnd.refdef.viewaxis[0], zmax, viewVector);
+				GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWFORWARD, viewVector);
+				VectorScale(backEnd.refdef.viewaxis[1], xmax, viewVector);
+				GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWLEFT,    viewVector);
+				VectorScale(backEnd.refdef.viewaxis[2], ymax, viewVector);
+				GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWUP,      viewVector);
 
-			if (r_sunlightMode->integer && backEnd.viewParms.flags & VPF_USESUNLIGHT)
-			{
-				vec4_t quadVerts[4];
-				vec2_t texCoords[4];
-				vec4_t box;
-
-				FBO_Bind(tr.screenShadowFbo);
-
-				box[0] = backEnd.viewParms.viewportX      * tr.screenShadowFbo->width / (float)glConfig.vidWidth;
-				box[1] = backEnd.viewParms.viewportY      * tr.screenShadowFbo->height / (float)glConfig.vidHeight;
-				box[2] = backEnd.viewParms.viewportWidth  * tr.screenShadowFbo->width / (float)glConfig.vidWidth;
-				box[3] = backEnd.viewParms.viewportHeight * tr.screenShadowFbo->height / (float)glConfig.vidHeight;
-
-				qglViewport(box[0], box[1], box[2], box[3]);
-				qglScissor(box[0], box[1], box[2], box[3]);
-
-				box[0] = backEnd.viewParms.viewportX / (float)glConfig.vidWidth;
-				box[1] = backEnd.viewParms.viewportY / (float)glConfig.vidHeight;
-				box[2] = box[0] + backEnd.viewParms.viewportWidth / (float)glConfig.vidWidth;
-				box[3] = box[1] + backEnd.viewParms.viewportHeight / (float)glConfig.vidHeight;
-
-				texCoords[0][0] = box[0]; texCoords[0][1] = box[3];
-				texCoords[1][0] = box[2]; texCoords[1][1] = box[3];
-				texCoords[2][0] = box[2]; texCoords[2][1] = box[1];
-				texCoords[3][0] = box[0]; texCoords[3][1] = box[1];
-
-				box[0] = -1.0f;
-				box[1] = -1.0f;
-				box[2] = 1.0f;
-				box[3] = 1.0f;
-
-				VectorSet4(quadVerts[0], box[0], box[3], 0, 1);
-				VectorSet4(quadVerts[1], box[2], box[3], 0, 1);
-				VectorSet4(quadVerts[2], box[2], box[1], 0, 1);
-				VectorSet4(quadVerts[3], box[0], box[1], 0, 1);
-
-				GL_State(GLS_DEPTHTEST_DISABLE);
-
-				GLSL_BindProgram(&tr.shadowmaskShader);
-
-				GL_BindToTMU(tr.renderDepthImage, TB_COLORMAP);
-
-				if (r_shadowCascadeZFar->integer != 0)
-				{
-					GL_BindToTMU(tr.sunShadowDepthImage[0], TB_SHADOWMAP);
-					GL_BindToTMU(tr.sunShadowDepthImage[1], TB_SHADOWMAP2);
-					GL_BindToTMU(tr.sunShadowDepthImage[2], TB_SHADOWMAP3);
-					GL_BindToTMU(tr.sunShadowDepthImage[3], TB_SHADOWMAP4);
-
-					GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP, backEnd.refdef.sunShadowMvp[0]);
-					GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP2, backEnd.refdef.sunShadowMvp[1]);
-					GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP3, backEnd.refdef.sunShadowMvp[2]);
-					GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP4, backEnd.refdef.sunShadowMvp[3]);
-				}
-				else
-				{
-					GL_BindToTMU(tr.sunShadowDepthImage[3], TB_SHADOWMAP);
-					GLSL_SetUniformMat4(&tr.shadowmaskShader, UNIFORM_SHADOWMVP, backEnd.refdef.sunShadowMvp[3]);
-				}
-
-				GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWORIGIN, backEnd.refdef.vieworg);
-				{
-					vec3_t viewVector;
-
-					float zmax = backEnd.viewParms.zFar;
-					float ymax = zmax * tan(backEnd.viewParms.fovY * M_PI / 360.0f);
-					float xmax = zmax * tan(backEnd.viewParms.fovX * M_PI / 360.0f);
-
-					VectorScale(backEnd.refdef.viewaxis[0], zmax, viewVector);
-					GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWFORWARD, viewVector);
-					VectorScale(backEnd.refdef.viewaxis[1], xmax, viewVector);
-					GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWLEFT, viewVector);
-					VectorScale(backEnd.refdef.viewaxis[2], ymax, viewVector);
-					GLSL_SetUniformVec3(&tr.shadowmaskShader, UNIFORM_VIEWUP, viewVector);
-
-					GLSL_SetUniformVec4(&tr.shadowmaskShader, UNIFORM_VIEWINFO, viewInfo);
-				}
-
-				RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
-
-				if (r_shadowBlur->integer)
-				{
-					viewInfo[2] = 1.0f / (float)(tr.screenScratchFbo->width);
-					viewInfo[3] = 1.0f / (float)(tr.screenScratchFbo->height);
-
-					FBO_Bind(tr.screenScratchFbo);
-
-					GLSL_BindProgram(&tr.depthBlurShader[0]);
-
-					GL_BindToTMU(tr.screenShadowImage, TB_COLORMAP);
-					GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
-
-					GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
-
-					RB_InstantQuad2(quadVerts, texCoords);
-
-					FBO_Bind(tr.screenShadowFbo);
-
-					GLSL_BindProgram(&tr.depthBlurShader[1]);
-
-					GL_BindToTMU(tr.screenScratchImage, TB_COLORMAP);
-					GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
-
-					GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
-
-					RB_InstantQuad2(quadVerts, texCoords);
-				}
+				GLSL_SetUniformVec4(&tr.shadowmaskShader, UNIFORM_VIEWINFO, viewInfo);
 			}
 
-			if (r_ssao->integer)
+			RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
+
+			if (r_shadowBlur->integer)
 			{
-				vec4_t quadVerts[4];
-				vec2_t texCoords[4];
+				viewInfo[2] = 1.0f / (float)(tr.screenScratchFbo->width);
+				viewInfo[3] = 1.0f / (float)(tr.screenScratchFbo->height);
 
-				viewInfo[2] = 1.0f / ((float)(tr.quarterImage[0]->width)  * tan(backEnd.viewParms.fovX * M_PI / 360.0f) * 2.0f);
-				viewInfo[3] = 1.0f / ((float)(tr.quarterImage[0]->height) * tan(backEnd.viewParms.fovY * M_PI / 360.0f) * 2.0f);
-				viewInfo[3] *= (float)backEnd.viewParms.viewportHeight / (float)backEnd.viewParms.viewportWidth;
-
-				FBO_Bind(tr.quarterFbo[0]);
-
-				qglViewport(0, 0, tr.quarterFbo[0]->width, tr.quarterFbo[0]->height);
-				qglScissor(0, 0, tr.quarterFbo[0]->width, tr.quarterFbo[0]->height);
-
-				VectorSet4(quadVerts[0], -1,  1, 0, 1);
-				VectorSet4(quadVerts[1],  1,  1, 0, 1);
-				VectorSet4(quadVerts[2],  1, -1, 0, 1);
-				VectorSet4(quadVerts[3], -1, -1, 0, 1);
-
-				texCoords[0][0] = 0; texCoords[0][1] = 1;
-				texCoords[1][0] = 1; texCoords[1][1] = 1;
-				texCoords[2][0] = 1; texCoords[2][1] = 0;
-				texCoords[3][0] = 0; texCoords[3][1] = 0;
-
-				GL_State( GLS_DEPTHTEST_DISABLE );
-
-				GLSL_BindProgram(&tr.ssaoShader);
-
-				GL_BindToTMU(tr.hdrDepthImage, TB_COLORMAP);
-
-				GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_VIEWINFO, viewInfo);
-
-				RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
-
-
-				viewInfo[2] = 1.0f / (float)(tr.quarterImage[0]->width);
-				viewInfo[3] = 1.0f / (float)(tr.quarterImage[0]->height);
-
-				FBO_Bind(tr.quarterFbo[1]);
-
-				qglViewport(0, 0, tr.quarterFbo[1]->width, tr.quarterFbo[1]->height);
-				qglScissor(0, 0, tr.quarterFbo[1]->width, tr.quarterFbo[1]->height);
+				FBO_Bind(tr.screenScratchFbo);
 
 				GLSL_BindProgram(&tr.depthBlurShader[0]);
 
-				GL_BindToTMU(tr.quarterImage[0],  TB_COLORMAP);
+				GL_BindToTMU(tr.screenShadowImage, TB_COLORMAP);
 				GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
 
 				GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
 
-				RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
+				RB_InstantQuad2(quadVerts, texCoords);
 
-
-				FBO_Bind(tr.screenSsaoFbo);
-
-				qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
-				qglScissor(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
+				FBO_Bind(tr.screenShadowFbo);
 
 				GLSL_BindProgram(&tr.depthBlurShader[1]);
 
-				GL_BindToTMU(tr.quarterImage[1],  TB_COLORMAP);
+				GL_BindToTMU(tr.screenScratchImage, TB_COLORMAP);
 				GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
 
 				GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
 
-
-				RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
+				RB_InstantQuad2(quadVerts, texCoords);
 			}
+		}
+
+		if (r_ssao->integer)
+		{
+			vec4_t quadVerts[4];
+			vec2_t texCoords[4];
+
+			viewInfo[2] = 1.0f / ((float)(tr.quarterImage[0]->width)  * tan(backEnd.viewParms.fovX * M_PI / 360.0f) * 2.0f);
+			viewInfo[3] = 1.0f / ((float)(tr.quarterImage[0]->height) * tan(backEnd.viewParms.fovY * M_PI / 360.0f) * 2.0f);
+			viewInfo[3] *= (float)backEnd.viewParms.viewportHeight / (float)backEnd.viewParms.viewportWidth;
+
+			FBO_Bind(tr.quarterFbo[0]);
+
+			qglViewport(0, 0, tr.quarterFbo[0]->width, tr.quarterFbo[0]->height);
+			qglScissor(0, 0, tr.quarterFbo[0]->width, tr.quarterFbo[0]->height);
+
+			VectorSet4(quadVerts[0], -1,  1, 0, 1);
+			VectorSet4(quadVerts[1],  1,  1, 0, 1);
+			VectorSet4(quadVerts[2],  1, -1, 0, 1);
+			VectorSet4(quadVerts[3], -1, -1, 0, 1);
+
+			texCoords[0][0] = 0; texCoords[0][1] = 1;
+			texCoords[1][0] = 1; texCoords[1][1] = 1;
+			texCoords[2][0] = 1; texCoords[2][1] = 0;
+			texCoords[3][0] = 0; texCoords[3][1] = 0;
+
+			GL_State( GLS_DEPTHTEST_DISABLE );
+
+			GLSL_BindProgram(&tr.ssaoShader);
+
+			GL_BindToTMU(tr.hdrDepthImage, TB_COLORMAP);
+
+			GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_VIEWINFO, viewInfo);
+
+			RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
+
+
+			viewInfo[2] = 1.0f / (float)(tr.quarterImage[0]->width);
+			viewInfo[3] = 1.0f / (float)(tr.quarterImage[0]->height);
+
+			FBO_Bind(tr.quarterFbo[1]);
+
+			qglViewport(0, 0, tr.quarterFbo[1]->width, tr.quarterFbo[1]->height);
+			qglScissor(0, 0, tr.quarterFbo[1]->width, tr.quarterFbo[1]->height);
+
+			GLSL_BindProgram(&tr.depthBlurShader[0]);
+
+			GL_BindToTMU(tr.quarterImage[0],  TB_COLORMAP);
+			GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
+
+			GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
+
+			RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
+
+
+			FBO_Bind(tr.screenSsaoFbo);
+
+			qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
+			qglScissor(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
+
+			GLSL_BindProgram(&tr.depthBlurShader[1]);
+
+			GL_BindToTMU(tr.quarterImage[1],  TB_COLORMAP);
+			GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
+
+			GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
+
+
+			RB_InstantQuad2(quadVerts, texCoords); //, color, shaderProgram, invTexRes);
 		}
 
 		// reset viewport and scissor
@@ -1124,7 +1160,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 		qglDisable(GL_DEPTH_CLAMP);
 	}
 
-	if (!isShadowView)
+	if (!(backEnd.viewParms.flags & VPF_DEPTHSHADOW))
 	{
 		RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
 
@@ -1133,7 +1169,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 			RB_DrawSun(0.1, tr.sunShader);
 		}
 
-		if (glRefConfig.framebufferObject && r_drawSunRays->integer)
+		if (r_drawSunRays->integer)
 		{
 			FBO_t *oldFbo = glState.currentFBO;
 			FBO_Bind(tr.sunRaysFbo);
@@ -1144,14 +1180,14 @@ const void	*RB_DrawSurfs( const void *data ) {
 			if (glRefConfig.occlusionQuery)
 			{
 				tr.sunFlareQueryActive[tr.sunFlareQueryIndex] = qtrue;
-				qglBeginQuery(GL_SAMPLES_PASSED, tr.sunFlareQuery[tr.sunFlareQueryIndex]);
+				qglBeginQueryARB(GL_SAMPLES_PASSED_ARB, tr.sunFlareQuery[tr.sunFlareQueryIndex]);
 			}
 
 			RB_DrawSun(0.3, tr.sunFlareShader);
 
 			if (glRefConfig.occlusionQuery)
 			{
-				qglEndQuery(GL_SAMPLES_PASSED);
+				qglEndQueryARB(GL_SAMPLES_PASSED_ARB);
 			}
 
 			FBO_Bind(oldFbo);
@@ -1170,7 +1206,7 @@ const void	*RB_DrawSurfs( const void *data ) {
 
 		FBO_Bind(NULL);
 		if (cubemap && cubemap->image)
-			qglGenerateTextureMipmapEXT(cubemap->image->texnum, GL_TEXTURE_CUBE_MAP);
+			qglGenerateTextureMipmap(cubemap->image->texnum, GL_TEXTURE_CUBE_MAP);
 	}
 
 	return (const void *)(cmd + 1);
@@ -1427,14 +1463,14 @@ const void *RB_CapShadowMap(const void *data)
 		{
 			if (tr.shadowCubemaps[cmd->map])
 			{
-				qglCopyTextureSubImage2DEXT(tr.shadowCubemaps[cmd->map]->texnum, GL_TEXTURE_CUBE_MAP_POSITIVE_X + cmd->cubeSide, 0, 0, 0, backEnd.refdef.x, glConfig.vidHeight - ( backEnd.refdef.y + PSHADOW_MAP_SIZE ), PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE);
+				qglCopyTextureImage2D(tr.shadowCubemaps[cmd->map]->texnum, GL_TEXTURE_CUBE_MAP_POSITIVE_X + cmd->cubeSide, 0, GL_RGBA8, backEnd.refdef.x, glConfig.vidHeight - ( backEnd.refdef.y + PSHADOW_MAP_SIZE ), PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, 0);
 			}
 		}
 		else
 		{
 			if (tr.pshadowMaps[cmd->map])
 			{
-				qglCopyTextureSubImage2DEXT(tr.pshadowMaps[cmd->map]->texnum, GL_TEXTURE_2D, 0, 0, 0, backEnd.refdef.x, glConfig.vidHeight - (backEnd.refdef.y + PSHADOW_MAP_SIZE), PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE);
+				qglCopyTextureImage2D(tr.pshadowMaps[cmd->map]->texnum, GL_TEXTURE_2D, 0, GL_RGBA8, backEnd.refdef.x, glConfig.vidHeight - (backEnd.refdef.y + PSHADOW_MAP_SIZE), PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, 0);
 			}
 		}
 	}
@@ -1601,27 +1637,14 @@ const void *RB_PostProcess(const void *data)
 	if (0 && r_sunlightMode->integer)
 	{
 		ivec4_t dstBox;
-		VectorSet4(dstBox, 0, glConfig.vidHeight - 128, 128, 128);
+		VectorSet4(dstBox, 0, 0, 128, 128);
 		FBO_BlitFromTexture(tr.sunShadowDepthImage[0], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 128, glConfig.vidHeight - 128, 128, 128);
+		VectorSet4(dstBox, 128, 0, 128, 128);
 		FBO_BlitFromTexture(tr.sunShadowDepthImage[1], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 256, glConfig.vidHeight - 128, 128, 128);
+		VectorSet4(dstBox, 256, 0, 128, 128);
 		FBO_BlitFromTexture(tr.sunShadowDepthImage[2], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 384, glConfig.vidHeight - 128, 128, 128);
+		VectorSet4(dstBox, 384, 0, 128, 128);
 		FBO_BlitFromTexture(tr.sunShadowDepthImage[3], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-	}
-
-	if (0 && r_shadows->integer == 4)
-	{
-		ivec4_t dstBox;
-		VectorSet4(dstBox, 512 + 0, glConfig.vidHeight - 128, 128, 128);
-		FBO_BlitFromTexture(tr.pshadowMaps[0], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512 + 128, glConfig.vidHeight - 128, 128, 128);
-		FBO_BlitFromTexture(tr.pshadowMaps[1], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512 + 256, glConfig.vidHeight - 128, 128, 128);
-		FBO_BlitFromTexture(tr.pshadowMaps[2], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512 + 384, glConfig.vidHeight - 128, 128, 128);
-		FBO_BlitFromTexture(tr.pshadowMaps[3], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 	}
 
 	if (0)

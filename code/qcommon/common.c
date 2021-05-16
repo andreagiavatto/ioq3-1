@@ -46,7 +46,7 @@ int demo_protocols[] =
 int		com_argc;
 char	*com_argv[MAX_NUM_ARGVS+1];
 
-jmp_buf abortframe;		// an ERR_DROP occurred, exit the entire frame
+jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
 
 
 FILE *debuglogfile;
@@ -158,7 +158,7 @@ void Com_EndRedirect (void)
 Com_Printf
 
 Both client and server can use this, and it will output
-to the appropriate place.
+to the apropriate place.
 
 A raw string should NEVER be passed as fmt, because of "%f" type crashers.
 =============
@@ -370,7 +370,7 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 Com_Quit_f
 
 Both client and server can use this, and it will
-do the appropriate things.
+do the apropriate things.
 =============
 */
 void Com_Quit_f( void ) {
@@ -398,7 +398,7 @@ void Com_Quit_f( void ) {
 
 COMMAND LINE FUNCTIONS
 
-+ characters separate the commandLine string into multiple console
++ characters seperate the commandLine string into multiple console
 command lines.
 
 All of these are valid:
@@ -430,7 +430,7 @@ void Com_ParseCommandLine( char *commandLine ) {
         if (*commandLine == '"') {
             inq = !inq;
         }
-        // look for a + separating character
+        // look for a + seperating character
         // if commandLine came from a file, we might have real line seperators
         if ( (*commandLine == '+' && !inq) || *commandLine == '\n'  || *commandLine == '\r' ) {
             if ( com_numConsoleLines == MAX_CONSOLE_LINES ) {
@@ -507,7 +507,7 @@ void Com_StartupVariable( const char *match ) {
 Com_AddStartupCommands
 
 Adds command line parameters as script statements
-Commands are separated by + signs
+Commands are seperated by + signs
 
 Returns qtrue if any late commands were added, which
 will keep the demoloop from immediately starting
@@ -1209,7 +1209,7 @@ char *CopyString( const char *in ) {
 ==============================================================================
 
 Goals:
-	reproducible without history effects -- no out of memory errors on weird map to map changes
+	reproducable without history effects -- no out of memory errors on weird map to map changes
 	allow restarting of the client without fragmentation
 	minimize total pages in use at run time
 	minimize total pages needed during load time
@@ -2656,7 +2656,7 @@ void Com_Init( char *commandLine ) {
 	char	*s;
 	int	qport;
 
-	Com_Printf( "%s %s %s\n", Q3_VERSION, PLATFORM_STRING, PRODUCT_DATE );
+	Com_Printf( "%s %s %s\n", Q3_VERSION, PLATFORM_STRING, __DATE__ );
 
 	if ( setjmp (abortframe) ) {
 		Sys_Error ("Error during initialization");
@@ -2774,7 +2774,7 @@ void Com_Init( char *commandLine ) {
 	com_introPlayed = Cvar_Get( "com_introplayed", "0", CVAR_ARCHIVE);
 #endif
 
-	s = va("%s %s %s", Q3_VERSION, PLATFORM_STRING, PRODUCT_DATE );
+	s = va("%s %s %s", Q3_VERSION, PLATFORM_STRING, __DATE__ );
 	com_version = Cvar_Get ("version", s, CVAR_ROM | CVAR_SERVERINFO );
 	com_gamename = Cvar_Get("com_gamename", GAMENAME_FOR_MASTER, CVAR_SERVERINFO | CVAR_INIT);
 	com_protocol = Cvar_Get("com_protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO | CVAR_INIT);
@@ -3606,178 +3606,4 @@ qboolean Com_IsVoipTarget(uint8_t *voipTargets, int voipTargetsSize, int clientN
 		return (voipTargets[index] & (1 << (clientNum & 0x07)));
 
 	return qfalse;
-}
-
-/*
-===============
-Field_CompletePlayerName
-===============
-*/
-static qboolean Field_CompletePlayerNameFinal( qboolean whitespace )
-{
-	int completionOffset;
-
-	if( matchCount == 0 )
-		return qtrue;
-
-	completionOffset = strlen( completionField->buffer ) - strlen( completionString );
-
-	Q_strncpyz( &completionField->buffer[ completionOffset ], shortestMatch,
-		sizeof( completionField->buffer ) - completionOffset );
-
-	completionField->cursor = strlen( completionField->buffer );
-
-	if( matchCount == 1 && whitespace )
-	{
-		Q_strcat( completionField->buffer, sizeof( completionField->buffer ), " " );
-		completionField->cursor++;
-		return qtrue;
-	}
-
-	return qfalse;
-}
-
-static void Name_PlayerNameCompletion( const char **names, int nameCount, void(*callback)(const char *s) ) 
-{
-	int i;
-
-	for( i = 0; i < nameCount; i++ ) {
-		callback( names[ i ] );
-	}
-}
-
-qboolean Com_FieldStringToPlayerName( char *name, int length, const char *rawname )
-{
-	char		hex[5];
-	int			i;
-	int			ch;
-
-	if( name == NULL || rawname == NULL )
-		return qfalse;
-
-	if( length <= 0 )
-		return qtrue;
-
-	for( i = 0; *rawname && i + 1 <= length; rawname++, i++ ) {
-		if( *rawname == '\\' ) {
-			Q_strncpyz( hex, rawname + 1, sizeof(hex) );
-			ch = Com_HexStrToInt( hex );
-			if( ch > -1 ) {
-				name[i] = ch;
-				rawname += 4; //hex string length, 0xXX
-			} else {
-				name[i] = *rawname;
-			}
-		} else {
-			name[i] = *rawname;
-		}
-	}
-	name[i] = '\0';
-
-	return qtrue;
-}
-
-qboolean Com_PlayerNameToFieldString( char *str, int length, const char *name )
-{
-	const char *p;
-	int i;
-	int x1, x2;
-
-	if( str == NULL || name == NULL )
-		return qfalse;
-
-	if( length <= 0 )
-		return qtrue;
-
-	*str = '\0';
-	p = name;
-
-	for( i = 0; *p != '\0'; i++, p++ )
-	{
-		if( i + 1 >= length )
-			break;
-
-		if( *p <= ' ' )
-		{
-			if( i + 5 + 1 >= length )
-				break;
-
-			x1 = *p >> 4;
-			x2 = *p & 15;
-
-			str[i+0] = '\\';
-			str[i+1] = '0';
-			str[i+2] = 'x';
-			str[i+3] = x1 > 9 ? x1 - 10 + 'a' : x1 + '0';
-			str[i+4] = x2 > 9 ? x2 - 10 + 'a' : x2 + '0';
-
-			i += 4;
-		} else {
-			str[i] = *p;
-		}		
-	}
-	str[i] = '\0';
-
-	return qtrue;
-}
-
-void Field_CompletePlayerName( const char **names, int nameCount )
-{
-	qboolean whitespace;
-
-	matchCount = 0;
-	shortestMatch[ 0 ] = 0;
-
-	if( nameCount <= 0 )
-		return;
-
-	Name_PlayerNameCompletion( names, nameCount, FindMatches );
-
-	if( completionString[0] == '\0' )
-	{
-		Com_PlayerNameToFieldString( shortestMatch, sizeof( shortestMatch ), names[ 0 ] );
-	}
-
-	//allow to tab player names
-	//if full player name switch to next player name
-	if( completionString[0] != '\0'
-		&& Q_stricmp( shortestMatch, completionString ) == 0 
-		&& nameCount > 1 ) 
-	{
-		int i;
-
-		for( i = 0; i < nameCount; i++ ) {
-			if( Q_stricmp( names[ i ], completionString ) == 0 ) 
-			{
-				i++;
-				if( i >= nameCount )
-				{
-					i = 0;
-				}
-
-				Com_PlayerNameToFieldString( shortestMatch, sizeof( shortestMatch ), names[ i ] );
-				break;
-			}
-		}
-	}
-
-	if( matchCount > 1 )
-	{
-		Com_Printf( "]%s\n", completionField->buffer );
-		
-		Name_PlayerNameCompletion( names, nameCount, PrintMatches );
-	}
-
-	whitespace = nameCount == 1? qtrue: qfalse;
-	if( !Field_CompletePlayerNameFinal( whitespace ) )
-	{
-
-	}
-}
-
-int QDECL Com_strCompare( const void *a, const void *b )
-{
-    const char **pa = (const char **)a;
-    const char **pb = (const char **)b;
-    return strcmp( *pa, *pb );
 }

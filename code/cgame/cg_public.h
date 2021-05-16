@@ -206,7 +206,7 @@ typedef enum {
 
 	CG_SHUTDOWN,
 //	void (*CG_Shutdown)( void );
-	// opportunity to flush and close any open files
+	// oportunity to flush and close any open files
 
 	CG_CONSOLE_COMMAND,
 //	qboolean (*CG_ConsoleCommand)( void );

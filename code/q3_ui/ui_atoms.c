@@ -807,7 +807,7 @@ static void NeedCDKeyAction( qboolean result ) {
 
 void UI_SetActiveMenu( uiMenuCommand_t menu ) {
 	// this should be the ONLY way the menu system is brought up
-	// ensure minimum menu data is cached
+	// enusure minumum menu data is cached
 	Menu_Cache();
 
 	switch ( menu ) {

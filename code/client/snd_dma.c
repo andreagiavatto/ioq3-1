@@ -100,7 +100,7 @@ void S_Base_SoundInfo(void) {
 	} else {
 		Com_Printf("%5d channels\n", dma.channels);
 		Com_Printf("%5d samples\n", dma.samples);
-		Com_Printf("%5d samplebits (%s)\n", dma.samplebits, dma.isfloat ? "float" : "int");
+		Com_Printf("%5d samplebits\n", dma.samplebits);
 		Com_Printf("%5d submission_chunk\n", dma.submission_chunk);
 		Com_Printf("%5d speed\n", dma.speed);
 		Com_Printf("%p dma buffer\n", dma.buffer);
@@ -119,31 +119,32 @@ void S_Base_SoundInfo(void) {
 static
 void S_Base_StartCapture( void )
 {
-	SNDDMA_StartCapture();
+	// !!! FIXME: write me.
 }
 
 static
 int S_Base_AvailableCaptureSamples( void )
 {
-	return SNDDMA_AvailableCaptureSamples();
+	// !!! FIXME: write me.
+	return 0;
 }
 
 static
 void S_Base_Capture( int samples, byte *data )
 {
-	SNDDMA_Capture(samples, data);
+	// !!! FIXME: write me.
 }
 
 static
 void S_Base_StopCapture( void )
 {
-	SNDDMA_StopCapture();
+	// !!! FIXME: write me.
 }
 
 static
 void S_Base_MasterGain( float val )
 {
-	SNDDMA_MasterGain(val);
+	// !!! FIXME: write me.
 }
 #endif
 
@@ -431,7 +432,7 @@ void S_SpatializeOrigin (vec3_t origin, int master_vol, int *left_vol, int *righ
 
 	const float dist_mult = SOUND_ATTENUATE;
 	
-	// calculate stereo separation and distance attenuation
+	// calculate stereo seperation and distance attenuation
 	VectorSubtract(origin, listener_origin, source_vec);
 
 	dist = VectorNormalize(source_vec);

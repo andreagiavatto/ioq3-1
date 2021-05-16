@@ -8,6 +8,12 @@ uniform float     u_LightRadius;
 varying vec3      var_Position;
 varying vec3      var_Normal;
 
+float sampleDistMap(sampler2D texMap, vec2 uv, float scale)
+{
+	vec3 distv = texture2D(texMap, uv).xyz;
+	return dot(distv, vec3(1.0 / (256.0 * 256.0), 1.0 / 256.0, 1.0)) * scale;
+}
+
 void main()
 {
 	vec3 lightToPos = var_Position - u_LightOrigin.xyz;
@@ -51,28 +57,42 @@ void main()
 #endif
 
 	intensity *= fade;
-
-	float part;
 #if defined(USE_PCF)
-	part  = float(texture2D(u_ShadowMap, st + vec2(-1.0/512.0, -1.0/512.0)).r != 1.0);
-	part += float(texture2D(u_ShadowMap, st + vec2( 1.0/512.0, -1.0/512.0)).r != 1.0);
-	part += float(texture2D(u_ShadowMap, st + vec2(-1.0/512.0,  1.0/512.0)).r != 1.0);
-	part += float(texture2D(u_ShadowMap, st + vec2( 1.0/512.0,  1.0/512.0)).r != 1.0);
-#else
-	part  = float(texture2D(u_ShadowMap, st).r != 1.0);
-#endif
+	float part;
+	
+	dist = sampleDistMap(u_ShadowMap, st + vec2(-1.0/512.0, -1.0/512.0), u_LightRadius);
+	part =  max(sign(lightDist - dist), 0.0);
 
+	dist = sampleDistMap(u_ShadowMap, st + vec2( 1.0/512.0, -1.0/512.0), u_LightRadius);
+	part += max(sign(lightDist - dist), 0.0);
+
+	dist = sampleDistMap(u_ShadowMap, st + vec2(-1.0/512.0,  1.0/512.0), u_LightRadius);
+	part += max(sign(lightDist - dist), 0.0);
+
+	dist = sampleDistMap(u_ShadowMap, st + vec2( 1.0/512.0,  1.0/512.0), u_LightRadius);
+	part += max(sign(lightDist - dist), 0.0);
+
+  #if defined(USE_DISCARD)
 	if (part <= 0.0)
 	{
 		discard;
 	}
+  #endif
 
-#if defined(USE_PCF)
 	intensity *= part * 0.25;
 #else
-	intensity *= part;
-#endif
+	dist = sampleDistMap(u_ShadowMap, st, u_LightRadius);
 
+  #if defined(USE_DISCARD)
+	if (lightDist - dist <= 0.0)
+	{
+		discard;
+	}
+  #endif
+			
+	intensity *= max(sign(lightDist - dist), 0.0);
+#endif
+		
 	gl_FragColor.rgb = vec3(0);
 	gl_FragColor.a = clamp(intensity, 0.0, 0.75);
 }

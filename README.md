@@ -1,5 +1,3 @@
-![Build](https://github.com/ioquake/ioq3/workflows/Build/badge.svg)
-
                    ,---------------------------------------.
                    |   _                     _       ____  |
                    |  (_)___  __ _ _  _ __ _| |_____|__ /  |
@@ -7,13 +5,13 @@
                    |  |_\___/\__, |\_,_\__,_|_\_\___|___/  |
                    |            |_|                        |
                    |                                       |
-                   `--------- https://ioquake3.org --------'
+                   `---------- http://ioquake3.org --------'
 
 The intent of this project is to provide a baseline Quake 3 which may be used
 for further development and baseq3 fun.
 Some of the major features currently implemented are:
 
-  * SDL 2 backend
+  * SDL backend
   * OpenAL sound API support (multiple speaker support and better sound
     quality)
   * Full x86_64 support on Linux
@@ -38,35 +36,10 @@ use a modern copy from http://icculus.org/gtkradiant/.
 
 The original id software readme that accompanied the Q3 source release has been
 renamed to id-readme.txt so as to prevent confusion. Please refer to the
-website for updated status.
+web-site for updated status.
 
-More documentation including a Player's Guide and Sysadmin Guide is on:
+More documentation is on:
 http://wiki.ioquake3.org/
-
-If you've got issues that you aren't sure are worth filing as bugs, or just
-want to chat, please visit our forums:
-http://discourse.ioquake.org
-
-# Thank You:
-
-<p>
-  <a href="https://www.digitalocean.com/">Digital Ocean<br/>
-    <img src="https://opensource.nyc3.cdn.digitaloceanspaces.com/attribution/assets/PoweredByDO/DO_Powered_by_Badge_blue.svg" width="201px">
-  </a>
-</p>
----
-<p>
-<a href="https://www.discourse.org/">Discourse<br/>
-<img src=
-"https://user-images.githubusercontent.com/1681963/52239617-e2683480-289c-11e9-922b-5da55472e5b4.png"
- width="300px"></a>
-</p>
----
-<p>
-<a href="https://icculus.org/">icculus dot org<br/>
-<img src="http://icculus.org/icculus-org-now.png" width="300px"></a>
-</p>
-
 
 # Compilation and installation
 
@@ -353,12 +326,128 @@ The defaults for these variables differ depending on the target platform.
                             all bots even if someone is named "allbots")
 
   tell <client num> <msg> - send message to a single client (new to server)
-
-  cvar_modified [filter]  - list modified cvars, can filter results (such as "r*"
-                            for renderer cvars) like cvarlist which lists all cvars
-
-  addbot random           - the bot name "random" now selects a random bot
 ```
+
+
+# README for Users
+
+## Using shared libraries instead of qvm
+
+To force Q3 to use shared libraries instead of qvms run it with the following
+parameters: `+set sv_pure 0 +set vm_cgame 0 +set vm_game 0 +set vm_ui 0`
+
+## Using Demo Data Files
+
+Copy demoq3/pak0.pk3 from the demo installer to your baseq3 directory. The
+qvm files in this pak0.pk3 will not work, so you have to use the native
+shared libraries or qvms from this project. To use the new qvms, they must be
+put into a pk3 file. A pk3 file is just a zip file, so any compression tool
+that can create such files will work. The shared libraries should already be
+in the correct place. Use the instructions above to use them.
+
+Please bear in mind that you will not be able to play online using the demo
+data, nor is it something that we like to spend much time maintaining or
+supporting.
+
+## Help! Ioquake3 won't give me an fps of X anymore when setting com_maxfps!
+
+Ioquake3 now uses the select() system call to wait for the rendering of the
+next frame when com_maxfps was hit. This will improve your CPU load
+considerably in these cases. However, not all systems may support a
+granularity for its timing functions that is required to perform this waiting
+correctly. For instance, ioquake3 tells select() to wait 2 milliseconds, but
+really it can only wait for a multiple of 5ms, i.e. 5, 10, 15, 20... ms.
+In this case you can always revert back to the old behaviour by setting the
+cvar com_busyWait to 1.
+
+
+## SDL Keyboard Differences
+
+ioquake3 clients have different keyboard behaviour compared to the original
+Quake3 clients.
+
+  * "Caps Lock" and "Num Lock" can not be used as normal binds since they
+      do not send a KEYUP event until the key is pressed again.
+
+  * SDL > 1.2.9 does not support disabling dead key recognition. In order to
+      send dead key characters (e.g. ~, ', `, and ^), you must key a Space (or
+      sometimes the same character again) after the character to send it on
+      many international keyboard layouts.
+
+  * The SDL client supports many more keys than the original Quake3 client.
+      For example the keys: "Windows", "SysReq", "ScrollLock", and "Break".
+      For non-US keyboards, all of the so called "World" keys are now supported
+      as well as F13, F14, F15, and the country-specific mode/meta keys.
+
+On many international layouts the default console toggle keys are also dead
+keys, meaning that dropping the console potentially results in
+unintentionally initiating the keying of a dead key. Furthermore SDL 1.2's
+dead key support is broken by design and Q3 doesn't support non-ASCII text
+entry, so the chances are you won't get the correct character anyway.
+
+If you use such a keyboard layout, you can set the cvar cl_consoleKeys. This
+is a space delimited list of key names that will toggle the console. The key
+names are the usual Q3 names e.g. "~", "`", "c", "BACKSPACE", "PAUSE",
+"WINDOWS" etc. It's also possible to use ASCII characters, by hexadecimal
+number. Some example values for cl_consoleKeys:
+
+    "~ ` 0x7e 0x60"           Toggle on ~ or ` (the default)
+    "WINDOWS"                 Toggle on the Windows key
+    "c"                       Toggle on the c key
+    "0x43"                    Toggle on the C character (Shift-c)
+    "PAUSE F1 PGUP"           Toggle on the Pause, F1 or Page Up keys
+
+Note that when you elect a set of console keys or characters, they cannot
+then be used for binding, nor will they generate characters when entering
+text. Also, in addition to the nominated console keys, Shift-ESC is hard
+coded to always toggle the console.
+
+## QuakeLive mouse acceleration
+(patch and this text written by TTimo from id)
+
+I've been using an experimental mouse acceleration code for a while, and
+decided to make it available to everyone. Don't be too worried if you don't
+understand the explanations below, this is mostly intended for advanced
+players:
+To enable it, set cl_mouseAccelStyle 1 (0 is the default/legacy behavior)
+
+New style is controlled with 3 cvars:
+
+sensitivity
+cl_mouseAccel
+cl_mouseAccelOffset
+
+The old code (cl_mouseAccelStyle 0) can be difficult to calibrate because if
+you have a base sensitivity setup, as soon as you set a non zero acceleration
+your base sensitivity at low speeds will change as well. The other problem
+with style 0 is that you are stuck on a square (power of two) acceleration
+curve.
+
+The new code tries to solve both problems:
+
+Once you setup your sensitivity to feel comfortable and accurate enough for
+low mouse deltas with no acceleration (cl_mouseAccel 0), you can start
+increasing cl_mouseAccel and tweaking cl_mouseAccelOffset to get the
+amplification you want for high deltas with little effect on low mouse deltas.
+
+cl_mouseAccel is a power value. Should be >= 1, 2 will be the same power curve
+as style 0. The higher the value, the faster the amplification grows with the
+mouse delta.
+
+cl_mouseAccelOffset sets how much base mouse delta will be doubled by
+acceleration. The closer to zero you bring it, the more acceleration will
+happen at low speeds. This is also very useful if you are changing to a new
+mouse with higher dpi, if you go from 500 to 1000 dpi, you can divide your
+cl_mouseAccelOffset by two to keep the same overall 'feel' (you will likely
+gain in precision when you do that, but that is not related to mouse
+acceleration).
+
+Mouse acceleration is tricky to configure, and when you do you'll have to
+re-learn your aiming. But you will find that it's very much forth it in the
+long run.
+
+If you try the new acceleration code and start using it, I'd be very
+interested by your feedback.
 
 
 # README for Developers
@@ -382,13 +471,11 @@ value in the prototype with intptr_t (arg0, arg1, ...stay int).
 
 Add the following code snippet to q_shared.h:
 
-```c
-#ifdef Q3_VM
-typedef int intptr_t;
-#else
-#include <stdint.h>
-#endif
-```
+    #ifdef Q3_VM
+    typedef int intptr_t;
+    #else
+    #include <stdint.h>
+    #endif
 
 Note if you simply wish to run mods on a 64bit platform you do not need to
 recompile anything since by default Q3 uses a virtual machine system.
@@ -509,14 +596,18 @@ directory, this restriction is lifted.
 
 # Contributing
 
-Please send all patches to bugzilla (https://bugzilla.icculus.org), or as a GitHub pull request and
-submit your patch there.
+Please send all patches to bugzilla (https://bugzilla.icculus.org), or join the
+mailing list (http://lists.ioquake.org/listinfo.cgi/ioquake3-ioquake.org) and
+submit your patch there.  The best case scenario is that you submit your patch
+to bugzilla, and then post the URL to the mailing list.
 
 The focus for ioq3 is to develop a stable base suitable for further development
-and provide players with the same Quake 3 experience they've had for years.
+and provide players with the same Quake 3 experience they've had for years. As
+such ioq3 does not have any significant graphical enhancements and none are
+planned at this time. However, improved graphics and sound patches will be
+accepted as long as they are entirely optional, do not require new media and
+are off by default.
 
-We do have graphical improvements with the new renderer, but they are off by default.
-See opengl2-readme.md for more information.
 
 # Building Official Installers
 
@@ -539,10 +630,12 @@ but we have some general guidelines:
     providing pak0.pk3 and the patch pk3s are not referred to or included in the
     installer.
 
-  * Please include at least a libSDL2 so/dylib/dll on every platform.
+  * Please include at least an SDL so/dylib/dll on every platform.
 
   * Please include an OpenAL so/dylib/dll, since every platform should be using
     it by now.
+
+  * Please contact the mailing list when you've made your installer.
 
   * Please be prepared to alter your installer on the whim of the maintainers.
 

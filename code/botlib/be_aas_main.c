@@ -241,7 +241,7 @@ int AAS_LoadFiles(const char *mapname)
 	return BLERR_NOERROR;
 } //end of the function AAS_LoadFiles
 //===========================================================================
-// called every time a map changes
+// called everytime a map changes
 //
 // Parameter:				-
 // Returns:					-
