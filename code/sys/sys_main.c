@@ -135,6 +135,16 @@ char *Sys_ConsoleInput(void)
 	return CON_Input( );
 }
 
+/*
+==================
+Sys_GetClipboardData
+==================
+*/
+char *Sys_GetClipboardData(void)
+{
+	return NULL;
+}
+
 #ifdef DEDICATED
 #	define PID_FILENAME PRODUCT_NAME "_server.pid"
 #else
@@ -616,7 +626,7 @@ void Sys_ParseArgs( int argc, char **argv )
 }
 
 #ifndef DEFAULT_BASEDIR
-#	ifdef MACOS_X
+#	ifdef __APPLE__
 #		define DEFAULT_BASEDIR Sys_StripAppBundle(Sys_BinaryPath())
 #	else
 #		define DEFAULT_BASEDIR Sys_BinaryPath()

@@ -573,7 +573,7 @@ CLIENT RELIABLE COMMAND COMMUNICATION
 ======================
 CL_AddReliableCommand
 
-The given command will be transmitted to the server, and is gauranteed to
+The given command will be transmitted to the server, and is guaranteed to
 not have future usercmd_t executed before it is executed
 ======================
 */
@@ -1069,7 +1069,8 @@ demo <demoname>
 */
 void CL_PlayDemo_f( void ) {
 	char		name[MAX_OSPATH];
-	char		*arg, *ext_test;
+	char		arg[MAX_OSPATH];
+	char		*ext_test;
 	int			protocol, i;
 	char		retry[MAX_OSPATH];
 
@@ -1083,7 +1084,7 @@ void CL_PlayDemo_f( void ) {
 	Cvar_Set( "sv_killserver", "2" );
 
 	// open the demo file
-	arg = Cmd_Argv(1);
+	Q_strncpyz( arg, Cmd_Argv(1), sizeof( arg ) );
 	
 	CL_Disconnect( qtrue );
 
@@ -1690,7 +1691,7 @@ CL_Connect_f
 ================
 */
 void CL_Connect_f( void ) {
-	char	*server;
+	char	server[MAX_OSPATH];
 	const char	*serverString;
 	int argc = Cmd_Argc();
 	netadrtype_t family = NA_UNSPEC;
@@ -1701,7 +1702,7 @@ void CL_Connect_f( void ) {
 	}
 	
 	if(argc == 2)
-		server = Cmd_Argv(1);
+		Q_strncpyz( server, Cmd_Argv(1), sizeof( server ) );
 	else
 	{
 		if(!strcmp(Cmd_Argv(1), "-4"))
@@ -1711,7 +1712,7 @@ void CL_Connect_f( void ) {
 		else
 			Com_Printf( "warning: only -4 or -6 as address type understood.\n");
 		
-		server = Cmd_Argv(2);
+		Q_strncpyz( server, Cmd_Argv(2), sizeof( server ) );
 	}
 
 	// save arguments for reconnect
@@ -1794,6 +1795,50 @@ static void CL_CompleteRcon( char *args, int argNum )
 
 		if( p > args )
 			Field_CompleteCommand( p, qtrue, qtrue );
+	}
+}
+
+/*
+==================
+CL_CompletePlayerName
+==================
+*/
+static void CL_CompletePlayerName( char *args, int argNum )
+{
+	if( argNum == 2 )
+	{
+		char		names[MAX_CLIENTS][MAX_NAME_LENGTH];
+		const char	*namesPtr[MAX_CLIENTS];
+		int			i;
+		int			clientCount;
+		int			nameCount;
+		const char *info;
+		const char *name;
+
+		//configstring
+		info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
+		clientCount = atoi( Info_ValueForKey( info, "sv_maxclients" ) );
+
+		nameCount = 0;
+
+		for( i = 0; i < clientCount; i++ ) {
+			if( i == clc.clientNum )
+				continue;
+
+			info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_PLAYERS+i];
+
+			name = Info_ValueForKey( info, "n" );
+			if( name[0] == '\0' )
+				continue;
+			Q_strncpyz( names[nameCount], name, sizeof(names[nameCount]) );
+			Q_CleanStr( names[nameCount] );
+
+			namesPtr[nameCount] = names[nameCount];
+			nameCount++;
+		}
+		qsort( (void*)namesPtr, nameCount, sizeof( namesPtr[0] ), Com_strCompare );
+
+		Field_CompletePlayerName( namesPtr, nameCount );
 	}
 }
 
@@ -1915,7 +1960,7 @@ void CL_Vid_Restart_f( void ) {
 		CL_ShutdownCGame();
 		// shutdown the renderer and clear the renderer interface
 		CL_ShutdownRef();
-		// client is no longer pure untill new checksums are sent
+		// client is no longer pure until new checksums are sent
 		CL_ResetPureClientAtServer();
 		// clear pak references
 		FS_ClearPakReferences( FS_UI_REF | FS_CGAME_REF );
@@ -1926,7 +1971,7 @@ void CL_Vid_Restart_f( void ) {
 		cls.cgameStarted = qfalse;
 		cls.soundRegistered = qfalse;
 
-		// unpause so the cgame definately gets a snapshot and renders a frame
+		// unpause so the cgame definitely gets a snapshot and renders a frame
 		Cvar_Set("cl_paused", "0");
 
 		// initialize the renderer interface
@@ -3258,7 +3303,7 @@ void CL_InitRef( void ) {
 
 	re = *ret;
 
-	// unpause so the cgame definately gets a snapshot and renders a frame
+	// unpause so the cgame definitely gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );
 }
 
@@ -3393,6 +3438,56 @@ static void CL_GenerateQKey(void)
 	}
 } 
 
+void CL_Sayto_f( void ) {
+	char		*rawname;
+	char		name[MAX_NAME_LENGTH];
+	char		cleanName[MAX_NAME_LENGTH];
+	const char	*info;
+	int			count;
+	int			i;
+	int			clientNum;
+	char		*p;
+
+	if ( Cmd_Argc() < 3 ) {
+		Com_Printf ("sayto <player name> <text>\n");
+		return;
+	}
+
+	rawname = Cmd_Argv(1);
+
+	Com_FieldStringToPlayerName( name, MAX_NAME_LENGTH, rawname );
+
+	info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
+	count = atoi( Info_ValueForKey( info, "sv_maxclients" ) );
+
+	clientNum = -1;
+	for( i = 0; i < count; i++ ) {
+
+		info = cl.gameState.stringData + cl.gameState.stringOffsets[CS_PLAYERS+i];
+		Q_strncpyz( cleanName, Info_ValueForKey( info, "n" ), sizeof(cleanName) );
+		Q_CleanStr( cleanName );
+
+		if ( !Q_stricmp( cleanName, name ) ) {
+			clientNum = i;
+			break;
+		}
+	}
+	if( clientNum <= -1 )
+	{
+		Com_Printf ("No such player name: %s.\n", name);
+		return;
+	}
+
+	p = Cmd_ArgsFrom(2);
+
+	if ( *p == '"' ) {
+		p++;
+		p[strlen(p)-1] = 0;
+	}
+
+	CL_AddReliableCommand(va("tell %i \"%s\"", clientNum, p ), qfalse);
+}
+
 /*
 ====================
 CL_Init
@@ -3469,7 +3564,7 @@ void CL_Init( void ) {
 #endif
 
 	cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
-#ifdef MACOS_X
+#ifdef __APPLE__
 	// In game video is REALLY slow in Mac OS X right now due to driver slowness
 	cl_inGameVideo = Cvar_Get ("r_inGameVideo", "0", CVAR_ARCHIVE);
 #else
@@ -3486,7 +3581,7 @@ void CL_Init( void ) {
 	m_yaw = Cvar_Get ("m_yaw", "0.022", CVAR_ARCHIVE);
 	m_forward = Cvar_Get ("m_forward", "0.25", CVAR_ARCHIVE);
 	m_side = Cvar_Get ("m_side", "0.25", CVAR_ARCHIVE);
-#ifdef MACOS_X
+#ifdef __APPLE__
 	// Input is jittery on OS X w/o this
 	m_filter = Cvar_Get ("m_filter", "1", CVAR_ARCHIVE);
 #else
@@ -3497,13 +3592,13 @@ void CL_Init( void ) {
 	j_yaw =          Cvar_Get ("j_yaw",          "-0.022", CVAR_ARCHIVE);
 	j_forward =      Cvar_Get ("j_forward",      "-0.25", CVAR_ARCHIVE);
 	j_side =         Cvar_Get ("j_side",         "0.25", CVAR_ARCHIVE);
-	j_up =           Cvar_Get ("j_up",           "1", CVAR_ARCHIVE);
+	j_up =           Cvar_Get ("j_up",           "0", CVAR_ARCHIVE);
 
 	j_pitch_axis =   Cvar_Get ("j_pitch_axis",   "3", CVAR_ARCHIVE);
-	j_yaw_axis =     Cvar_Get ("j_yaw_axis",     "4", CVAR_ARCHIVE);
+	j_yaw_axis =     Cvar_Get ("j_yaw_axis",     "2", CVAR_ARCHIVE);
 	j_forward_axis = Cvar_Get ("j_forward_axis", "1", CVAR_ARCHIVE);
 	j_side_axis =    Cvar_Get ("j_side_axis",    "0", CVAR_ARCHIVE);
-	j_up_axis =      Cvar_Get ("j_up_axis",      "2", CVAR_ARCHIVE);
+	j_up_axis =      Cvar_Get ("j_up_axis",      "4", CVAR_ARCHIVE);
 
 	Cvar_CheckRange(j_pitch_axis, 0, MAX_JOYSTICK_AXIS-1, qtrue);
 	Cvar_CheckRange(j_yaw_axis, 0, MAX_JOYSTICK_AXIS-1, qtrue);
@@ -3595,6 +3690,10 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("model", CL_SetModel_f );
 	Cmd_AddCommand ("video", CL_Video_f );
 	Cmd_AddCommand ("stopvideo", CL_StopVideo_f );
+	if( !com_dedicated->integer ) {
+		Cmd_AddCommand ("sayto", CL_Sayto_f );
+		Cmd_SetCommandCompletionFunc( "sayto", CL_CompletePlayerName );
+	}
 	CL_InitRef();
 
 	SCR_Init ();

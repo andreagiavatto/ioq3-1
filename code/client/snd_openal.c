@@ -582,7 +582,7 @@ typedef struct src_s
 	qboolean	local;			// Is this local (relative to the cam)
 } src_t;
 
-#ifdef MACOS_X
+#ifdef __APPLE__
 	#define MAX_SRC 64
 #else
 	#define MAX_SRC 128
@@ -2207,9 +2207,11 @@ static ALCdevice *alCaptureDevice;
 static cvar_t *s_alCapture;
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN64)
+#define ALDRIVER_DEFAULT "OpenAL64.dll"
+#elif defined(_WIN32)
 #define ALDRIVER_DEFAULT "OpenAL32.dll"
-#elif defined(MACOS_X)
+#elif defined(__APPLE__)
 #define ALDRIVER_DEFAULT "/System/Library/Frameworks/OpenAL.framework/OpenAL"
 #elif defined(__OpenBSD__)
 #define ALDRIVER_DEFAULT "libopenal.so"
@@ -2643,7 +2645,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 #endif
 	else
 	{
-#ifdef MACOS_X
+#ifdef __APPLE__
 		// !!! FIXME: Apple has a 1.1-compliant OpenAL, which includes
 		// !!! FIXME:  capture support, but they don't list it in the
 		// !!! FIXME:  extension string. We need to check the version string,
